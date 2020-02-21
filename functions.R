@@ -1243,11 +1243,12 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, hp_tset_24h, para
     df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(24)),]
     
     # Assign the control variables of the scenario
-    df_$hp_tset <- hp_tset_24h[df$time %in% df_$time]
+    df_$hp_tset_l0 <- hp_tset_24h[df$time %in% df_$time]
     df_$hp_status_l0 <- ifelse(is.na(hp_tset_24h[df$time %in% df_$time]),0,1)
     
     # Iterate for each timestep (1 hour)
     for (i in 1:nrow(df_)){
+      #i=2
       # Calculate the floor temperature and indoor temperature under free floating conditions
       df_$hp_cons_l0[i] <- 0
       tfloor_ff <- df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
@@ -1255,7 +1256,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, hp_tset_24h, para
       # If the heat pump should be on, estimate the heat pump consumption and 
       # re-estimate the floor and indoor temperatures considering the heat input.
       if(df_$hp_status_l0[i]==1){
-        df_$tfloor_l0[i] <- df_$hp_status_l0[i]
+        df_$tfloor_l0[i] <- df_$hp_tset_l0[i]
         df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
         if(df_$hp_cons_l0[i]>0){
           df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
@@ -1433,7 +1434,7 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
       params = params,
       ts_prediction=smartAgg(df_v,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
     )
-    ggplot(predv)+geom_line(aes(time,hp_cons))+geom_line(aes(time,hp_cons_l0),col=2)
+    ggplot(predv)+geom_line(aes(time,ti))+geom_line(aes(time,ti_l0),col=2)
     
     # Accuracy indoor temperature and consumption
     q_total_diff <- abs(((sum(predv$value,na.rm=T)-sum(predv$value_l0,na.rm=T))/sum(predv$value,na.rm=T))*100)
