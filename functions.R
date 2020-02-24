@@ -63,22 +63,24 @@ tune_model_input <- function(df,params){
   
   # Lag the input columns and weather tranformations
     # HP consumption
-  for (l in 0:max(params[c("lags_hp_cons","ar_hp_cons")])){
+  for (l in 0:max(params[c("lags_hp_cons","ar_hp_cons","ar_tfloor")])){
     df[,paste0("hp_cons_l",l)] <- dplyr::lag(df[,"hp_cons"],l)
-  }
-  for (l in 0:max(params[c("lags_hp_cons","ar_hp_cons")])){
     df[,paste0("hp_status_l",l)] <- dplyr::lag(df[,"hp_status"],l)
     df[,paste0("hp_cop_l",l)] <- dplyr::lag(df[,"hp_cop"],l)
   }
+  df[,"hp_tset_l0"] <- df[,"hp_tset"]
   for (l in 0:max(params[c("lags_tfloor","ar_tfloor")])){
     df[,paste0("tfloor_l",l)] <- dplyr::lag(df[,"tfloor"],l)
   }
     # Weather and indoor comfort
-  for (l in 0:max(params[c("lags_te","lags_infiltrations")])){
+  for (l in 0:max(c(1,params[c("lags_te","lags_infiltrations")]))){
     df[,paste0("te_l",l)] <- dplyr::lag(df[,"te"],l)
   }
-  for (l in 0:max(params[c("ar_ti","lags_ti","lags_infiltrations")])){
+  for (l in 0:max(c(1,params[c("ar_ti","lags_ti","lags_infiltrations")]))){
     df[,paste0("ti_l",l)] <- dplyr::lag(df[,"ti"],l)
+  }
+  for (l in 0:params["lags_hg"]){
+    df[,paste0("hg_l",l)] <- dplyr::lag(df[,"hg"],l)
   }
   for (l in 0:params["lags_GHI"]){
     df[,paste0("GHI_l",l)] <- dplyr::lag(df[,"GHI"],l)
@@ -116,52 +118,9 @@ tune_model_input <- function(df,params){
     }
   }
   
-  # Avoid NA values in df
-  df <- df[complete.cases(df),]
-  
   return(df)
 }
 
-# GAM Model with indoor temperature as output, and indoor-outdoor temperature, status of the boiler  and sun position as input
-calculate_model_ti <- function(params, df, df_v=NULL, output="aic"){
-  
-  df <- tune_model_input(df, params)
-  
-  # Formula definition. Base formula + GHI and windSpeed terms
-  formula <-  as.formula(sprintf("ti_l0 ~ 
-      0 + %s + %s + %s",
-      paste0("ti_l",1:params["ar_ti"],"",collapse=" + "),
-      paste0("tfloor_l",0:(params["lags_tfloor"]),collapse=" + "),
-      paste0("te_l",0:(params["lags_te"]),"",collapse=" + ")
-    ))
-  
-  # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
-  for (i in 0:params["lags_GHI"]){
-    sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
-    GHI_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
-    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(GHI_features,collapse=" + "))))
-  }
-  
-  # Define the windBearing fourier series terms and add the infiltration terms to the formula
-  for (i in 0:params["lags_infiltrations"]){#(params[3]-1)){#0){#
-    windBearing_fs_terms <- colnames(df)[grepl(paste0("^windBearing_fs_l",i),colnames(df))]
-    infiltrations_features <- lapply(windBearing_fs_terms,function(x){paste0("infiltrations_l",i,":",x)})
-    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(infiltrations_features,collapse=" + "))))
-  }
-  
-  mod <- lm(formula, data=df)
-  
-  if(output == "model"){
-    return(list("mod"=mod,"df"=df))
-  } else {
-      if(!is.null(df_v)){
-        df_v <- tune_model_input(df_v, params)
-        return(-pracma::rmserr(df_v$ti_l0,predict(mod,df_v))$rmse)#-AIC(mod))#summary(mod)$r.sq)
-      } else {
-        return(-pracma::rmserr(mod$model$ti_l0,mod$fitted.value)$rmse)#-AIC(mod))#summary(mod)$r.sq)
-      }
-  }
-}
 
 fs <- function(X, nharmonics, pair_function=T) {
   do.call("c", lapply(1:nharmonics, function(i) {
@@ -186,9 +145,9 @@ add_fourier_series_sunazimuth <- function(df, sunAzimuth_nharmonics, min_solarEl
   #                      "max"=max(yearly_sun$azimuth[yearly_sun$altitude>min_solarElevation]))
   # sunAzimuth_01 <- normalize_range_int(ifelse(df$sunAzimuth==0,NA,df$sunAzimuth),0,1,specs = min_max_azimuth)
   
-  sunAzimuth_01 <- normalize_range_int(df$sunAz,-0.5,0.5,specs = c("min"=0,"max"=360))
-  
-  sunAzimuth_fs <- as.data.frame(fs(sunAzimuth_01, nharmonics=sunAzimuth_nharmonics, pair_function=F))
+  sunAzimuth_01 <- normalize_range_int(df$sunAz,0,1,specs = c("min"=0,"max"=360))
+
+  sunAzimuth_fs <- as.data.frame(fs(sunAzimuth_01, nharmonics=sunAzimuth_nharmonics))
   colnames(sunAzimuth_fs) <- paste0("sunAzimuth_fs_",colnames(sunAzimuth_fs))
   sunAzimuth_fs[is.na(sunAzimuth_fs)] <- 0
   df <- cbind(df,sunAzimuth_fs)
@@ -211,9 +170,9 @@ add_fourier_series_dayhour <- function(df, dayhour_nharmonics) {
 add_fourier_series_windbearing <- function(df, windBearing_nharmonics) {
   
   # Fourier series of the windBearing
-  windBearing_01 <- normalize_range_int(df$windBearing,-0.5,0.5,specs = c("min"=0,"max"=360))
+  windBearing_01 <- normalize_range_int(df$windBearing,0,1,specs = c("min"=0,"max"=360))
   
-  windBearing_fs <- as.data.frame(fs(windBearing_01, nharmonics=windBearing_nharmonics,pair_function = F))
+  windBearing_fs <- as.data.frame(fs(windBearing_01, nharmonics=windBearing_nharmonics))
   colnames(windBearing_fs) <- paste0("windBearing_fs_",colnames(windBearing_fs))
   df <- cbind(df,windBearing_fs)
   
@@ -643,9 +602,54 @@ printlm <- function(mod, df, value_column, value_repr, ncol, irf_objects=NULL){
 
 }
 
-calculate_model_q <- function(params, df, df_v=NULL, output="aic"){
+calculate_model_ti <- function(params, df, train_dates, output="aic"){
+  
+  df <- tune_model_input(df, params)
+  df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
+  df <- df[complete.cases(df),]
+  
+  # Formula definition. Base formula + GHI and windSpeed terms
+  formula <-  as.formula(sprintf("ti_l0 ~ 
+                                 0 + %s + %s + %s + %s",
+                                 paste0("ti_l",1:params["ar_ti"],"",collapse=" + "),
+                                 paste0("tfloor_l",0:(params["lags_tfloor"]),collapse=" + "),
+                                 paste0("te_l",0:(params["lags_te"]),"",collapse=" + "),
+                                 paste0("hg_l",0:(params["lags_hg"]),"",collapse=" + ")
+  ))
+  
+  # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
+  for (i in 0:params["lags_GHI"]){
+    sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
+    solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
+    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
+  }
+  
+  # Define the windBearing fourier series terms and add the infiltration terms to the formula
+  for (i in 0:params["lags_infiltrations"]){#(params[3]-1)){#0){#
+    windBearing_fs_terms <- colnames(df)[grepl(paste0("^windBearing_fs_l",i),colnames(df))]
+    infiltrations_features <- lapply(windBearing_fs_terms,function(x){paste0("infiltrations_l",i,":",x)})
+    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(infiltrations_features,collapse=" + "))))
+  }
+  
+  mod <- lm(formula, data=df)
+  
+  if(output == "model"){
+    return(list("mod"=mod,"df"=df))
+  } else {
+    if(!is.null(df_v)){
+      df_v <- tune_model_input(df_v, params)
+      return(-pracma::rmserr(df_v$ti_l0,predict(mod,df_v))$rmse)#-AIC(mod))#summary(mod)$r.sq)
+    } else {
+      return(-pracma::rmserr(mod$model$ti_l0,mod$fitted.value)$rmse)#-AIC(mod))#summary(mod)$r.sq)
+    }
+  }
+}
+
+calculate_model_q <- function(params, df, train_dates, output="aic"){
   
   df <- tune_model_input(df,params)
+  df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
+  df <- df[complete.cases(df),]
   
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("hp_cons_l0 ~ 
@@ -673,18 +677,29 @@ calculate_model_q <- function(params, df, df_v=NULL, output="aic"){
   }
 }
 
-calculate_model_tfloor <- function(params, df, df_v=NULL, output="aic"){
+calculate_model_tfloor <- function(params, df, train_dates, output="aic"){
   
   df <- tune_model_input(df,params)
+  df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
+  df <- df[complete.cases(df),]
   
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("tfloor_l0 ~ 
-      0 + %s + %s + %s",
-      paste0("tfloor_l",1:params["ar_tfloor"],"",collapse=" + "),
-      paste0("hp_cons_l",0:params["lags_hp_cons"],"",collapse=" + "),
-      paste0("te_l",0:params["lags_te"],"",collapse=" + "),
-      paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + ")
+      0 + %s + %s",
+      paste0(mapply(function(x){sprintf("tfloor_l%s:as.factor(hp_status_l%s)",x,x)},1:params["ar_tfloor"]),collapse=" + "),
+      paste0("hp_cons_l",0:params["lags_hp_cons"],"",collapse=" + ")
+      #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
+      #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
+      #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
+      #paste0("ti_l",1:max(1,params["lags_ti"]),"",collapse=" + ")
   ))
+  
+  # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
+  for (i in 0:params["lags_GHI"]){
+    sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
+    solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
+    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
+  }
   
   mod <- lm(formula, data=df)
   
@@ -1233,14 +1248,27 @@ plot_irf <- function(linear_coefficients, impulse_lags, pattern_ar_coefficients,
   }
 }
 
-prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, hp_tset_24h, params, ts_prediction){
+prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NULL, hp_tset_24h, params, ts_prediction=NULL){
+  
+  df <- tune_model_input(df,params)
+  if(!is.null(rows_to_filter) && sum(rows_to_filter,na.rm=T)>0){ 
+    df <- df[rows_to_filter,]
+    hp_tset_24h <- hp_tset_24h[rows_to_filter]
+  }
+  #df <- df[complete.cases(df),]
+  
+  df$date <- as.Date(df$time, tz="Europe/Berlin")
+  if(is.null(ts_prediction)){
+    ts_prediction <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
+  }
   
   # Simulate by sets of 24h from the ts_prediction
   df <- lapply(ts_prediction,function(ts_){
     
     # Filter the initial dataset 
     #ts_=ts_prediction[1]
-    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(24)),]
+    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(23)),]
+    df_$ts_prediction <- ts_
     
     # Assign the control variables of the scenario
     df_$hp_tset_l0 <- hp_tset_24h[df$time %in% df_$time]
@@ -1255,7 +1283,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, hp_tset_24h, para
       ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,])
       # If the heat pump should be on, estimate the heat pump consumption and 
       # re-estimate the floor and indoor temperatures considering the heat input.
-      if(df_$hp_status_l0[i]==1){
+      if(df_$hp_status_l0[i]==1 && !is.na(tfloor_ff) && !is.na(ti_ff)){
         df_$tfloor_l0[i] <- df_$hp_tset_l0[i]
         df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
         if(df_$hp_cons_l0[i]>0){
@@ -1272,14 +1300,14 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, hp_tset_24h, para
       
       # Reassign the ti calculated values to next timesteps lagged values
       for (l in 1:max(params[c("ar_tfloor","lags_tfloor")])){
-        tryCatch({df_[i+l,paste0("tfloor_l",l)] <- df_$tfloor_l0[i]}, error=function(e){next})
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tfloor_l",l)] <- df_$tfloor_l0[i]}}, error=function(e){next})
       }
       for (l in 1:max(params[c("ar_hp_cons","lags_hp_cons")])){
-        tryCatch({df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}, error=function(e){next})
-        tryCatch({df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}, error=function(e){next})
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
       }
       for (l in 1:max(params[c("ar_ti","lags_ti")])){
-        tryCatch({df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}, error=function(e){next})
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}}, error=function(e){next})
       }
     }
   
@@ -1406,8 +1434,48 @@ smartAgg <- function(df, by, ..., catN=T, printAgg=F) {
   return(dfAgg)
 }
 
+rmserr <- function (x, y, summary = FALSE){
+  if (!is.numeric(x) || !is.numeric(y)) 
+    stop("Arguments 'x' and 'y' must be numeric vectors.")
+  if (length(x) != length(y)) 
+    stop("Vectors 'x' and ' y' must have the same length.")
+  n <- length(x)
+  mae <- sum(abs(y - x),na.rm=T)/n
+  mae_f <- formatC(mae, digits = 4, format = "f")
+  mse <- sum((y - x)^2,na.rm=T)/n
+  mse_f <- formatC(mse, digits = 4, format = "f")
+  rmse <- sqrt(sum((y - x)^2,na.rm=T)/n)
+  rmse_f <- formatC(rmse, digits = 4, format = "f")
+  mape <- sum(abs((y - x)/x),na.rm=T)/n
+  mape_f <- formatC(mape, digits = 4, format = "f")
+  nmse <- sum((y - x)^2,na.rm=T)/sum((x - mean(x))^2,na.rm=T)
+  nmse_f <- formatC(nmse, digits = 4, format = "f")
+  rstd <- sqrt(sum((y - x)^2)/n)/mean(x)
+  rstd_f <- formatC(rstd, digits = 4, format = "f")
+  if (summary) {
+    cat("-- Error Terms --------------------------------------------------\n")
+    cat(" MAE:  ", mae_f, "  \t- mean absolute error (in range [", 
+        range(x), "])\n")
+    cat(" MSE:  ", mse_f, "  \t- mean squared error (the variance?!)\n")
+    cat(" RMSE: ", rmse_f, "  \t- root mean squared error (std. dev.)\n")
+    cat(" MAPE: ", mape_f, "  \t- mean absolute percentage error\n")
+    cat(" LMSE: ", nmse_f, "  \t- normalized mean squared error\n")
+    cat(" rSTD: ", rstd_f, "  \t- relative standard deviation (", 
+        mean(x), ")\n")
+    cat("-----------------------------------------------------------------\n")
+  }
+  R <- list(mae = mae, mse = mse, rmse = rmse, mape = mape, 
+            nmse = nmse, rstd = rstd)
+  if (summary) {
+    invisible(R)
+  }
+  else {
+    return(R)
+  }
+}
+
 optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_feature, min_per_feature, 
-                                       max_per_feature, names_per_feature, df_t, df_v){
+                                       max_per_feature, names_per_feature, df, train_dates, val_dates){
     #X=sample(c(0,1),nBits,replace=T)
     params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, min_per_feature, 
                                  max_per_feature)
@@ -1415,54 +1483,47 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
     
     # Training of the models
     tryCatch({
-      mod_q <- calculate_model_q(params, df_t, output="model")$mod
-      mod_tfloor <- calculate_model_tfloor(params, df_t, output="model")$mod
-      mod_ti_ <- calculate_model_ti(params, df_t, output="model")
+      mod_q <- calculate_model_q(params, df, train_dates, output="model")$mod
+      mod_tfloor <- calculate_model_tfloor(params, df, train_dates, output="model")$mod
+      mod_ti <- calculate_model_ti(params, df, train_dates, output="model")$mod
     },error=function(e){return(-1000)})
-    mod_ti <- mod_ti_$mod
-    df <- mod_ti_$df
     
     # Validation of the models in 24h predictions
-    df_v <- tune_model_input(df_v,params)
-    df_v$date <- as.Date(df_v$time, tz="Europe/Berlin")
     predv <- prediction_scenario(
       mod_q = mod_q, 
       mod_ti = mod_ti,
       mod_tfloor = mod_tfloor,
-      df=df_v,
-      hp_tset_24h = ifelse(df_v$hp_status==0,NA,df_v$hp_tset),
+      df = df,
+      rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
+      hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
       params = params,
-      ts_prediction=smartAgg(df_v,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
+      ts_prediction = NULL
     )
-    ggplot(predv)+geom_line(aes(time,ti))+geom_line(aes(time,ti_l0),col=2)
     
     # Accuracy indoor temperature and consumption
-    q_total_diff <- abs(((sum(predv$value,na.rm=T)-sum(predv$value_l0,na.rm=T))/sum(predv$value,na.rm=T))*100)
-    q_diff <- pracma::rmserr(predv$value[is.finite(predv$value) & predv$value>0],
-                             predv$value_l0[is.finite(predv$value) & predv$value>0])$rmse
-    predv_d <- smartAgg(predv,"ymd",function(x){sum(as.numeric(x),na.rm=T)},c("value","value_l0"),catN = F)
-    q_diff_d <- pracma::rmserr(predv_d$value[is.finite(predv_d$value) & predv_d$value>0],
-                               predv_d$value_l0[is.finite(predv_d$value) & predv_d$value>0])$rmse
-    ti_diff <- pracma::rmserr(predv$ti[is.finite(predv$ti)],predv$ti_l0[is.finite(predv$ti)])$rmse
-    # Autocorrelations
-    a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = F)
-    inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_q$model$value_l0-mod_q$fitted.values,plot = F)
-    inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    # Impulse responses
-    mod_ti_te <- sum(abs(plot_irf(mod_ti$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
-    mod_ti_value <- sum(plot_irf(mod_ti$coefficients,24,"^value_l",plot = F,exhogenous_coeff = T)$value<(-0.05))
-    mod_q_dte  <- sum(abs(plot_irf(mod_q$coefficients,24,"^dte_l",plot = F,exhogenous_coeff = T)$value)>10)
-    mod_q_dti <- sum(abs(plot_irf(mod_q$coefficients,24,"^dti_l",plot = F,exhogenous_coeff = T)$value)>10)
-    mod_q_te <- sum(abs(plot_irf(mod_q$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
+    q_diff <- rmserr(predv$hp_cons[is.finite(predv$hp_cons) & predv$hp_cons>0],
+                             predv$hp_cons_l0[is.finite(predv$hp_cons) & predv$hp_cons>0])$rmse
+    ti_diff <- rmserr(predv$ti[is.finite(predv$ti)],predv$ti_l0[is.finite(predv$ti)])$rmse
+    tfloor_diff <- rmserr(predv$tfloor[is.finite(predv$tfloor)],predv$tfloor_l0[is.finite(predv$tfloor)])$rmse
     
-    score <- - q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
-    # -mean(
-    #   c(ti_diff,
-    #     q_diff,
-    #     q_total_diff)
-    # )
+    # # Autocorrelations
+    # a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = T)
+    # inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+    # a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = T)
+    # inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+    # a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = T)
+    # inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+    #
+    # # Impulse responses
+    # mod_ti_te <- sum(abs(plot_irf(mod_ti$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
+    # mod_ti_value <- sum(plot_irf(mod_ti$coefficients,24,"^value_l",plot = F,exhogenous_coeff = T)$value<(-0.05))
+    # mod_q_dte  <- sum(abs(plot_irf(mod_q$coefficients,24,"^dte_l",plot = F,exhogenous_coeff = T)$value)>10)
+    # mod_q_dti <- sum(abs(plot_irf(mod_q$coefficients,24,"^dti_l",plot = F,exhogenous_coeff = T)$value)>10)
+    # mod_q_te <- sum(abs(plot_irf(mod_q$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
+    
+    score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
+      -ti_diff*q_diff*tfloor_diff
     if (is.finite(score)){
       return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
-    } else {return(-1000)}
+    } else {return(-10000000000000)}
   }
