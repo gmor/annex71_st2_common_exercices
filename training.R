@@ -2,6 +2,8 @@ source("functions.R")
 
 # Libraries for mathematics
 library(expm)
+library(splines)
+library(mgcv)
 
 # Libraries for graphics
 library(cowplot)
@@ -10,7 +12,7 @@ library(gridExtra)
 library(extrafont)
 loadfonts()
 # Libraries for data wrangling
-#library(padr)
+library(padr)
 library(lubridate)
 library(parallel)
 library(oce)
@@ -29,7 +31,7 @@ library(readxl)
 house <- read_excel_allsheets("data/Twin_house_O5_exp1_60minR1.xlsx")$Sheet1
 weather <- read_excel_allsheets("data/Twin_house_weather_exp1_60min_compensated.xlsx")$`Weather_Station_IBP_2018-11-01_`
 weather[,c("sunAz","sunEl")] <- do.call(cbind,oce::sunAngle(weather$DATE,latitude = 47.874,longitude = 11.728))[,c("azimuth","altitude")]
-  
+
 df_house <- data.frame("time"=house$DATE,
                  "hp_cons"=house$hp_el_cons,
                  "hp_status"=house$`hp_status_command (u1)`,
@@ -37,8 +39,16 @@ df_house <- data.frame("time"=house$DATE,
                  "hp_cop"=house$COP,
                  "tfloor"=house$HeatPump_actual_Tsup,
                  "ti"=house$`Building's representative Temperature of the current time step(volume-averaged)`,
-                 "hg"=rowSums(house[,grepl("_sum__hin_",colnames(house))])
-)
+                 "hg"=rowSums(house[,grepl("_sum__hin_",colnames(house))]),
+                 #"air_h"=rowSums(house[,grepl("_SUA_IHS_elP",colnames(house))]),
+                 #"air_s"=rowSums(house[,grepl("_SUA_fan_elP",colnames(house))]),
+                 #"air_e"=rowSums(house[,grepl("_EHA_fan_elP",colnames(house))]),
+                 "vent"=rowSums(
+                   data.frame((house$o5_Vent_child1_SUA_AT*house$o5_Vent_child1_SUA_VFR-house$o5_child1_AT*house$o5_Vent_child1_EHA_VFR),
+                              house$o5_Vent_child2_SUA_AT*house$o5_Vent_child2_SUA_VFR-house$o5_child2_AT*house$o5_Vent_child2_EHA_VFR,
+                              house$o5_Vent_living_SUA_AT*house$o5_Vent_living_SUA_VFR-(house$o5_living_AT+house$o5_bath_AT)*house$o5_Vent_bath_EHA_VFR
+                    ))
+                 )
 
 df_weather <- data.frame(
                  "time"=weather$DATE,
@@ -46,6 +56,7 @@ df_weather <- data.frame(
                  "GHI"=weather$Radiation_Global,
                  "BHI"=weather$Radiation_Global-weather$Radiation_Diffuse,
                  "sunAz"=weather$sunAz,
+                 "sunEl"=weather$sunEl,
                  "humidity"=weather$RelativeHumidity,
                  "windSpeed"=weather$WindSpeed,
                  "windBearing"=weather$WindDirection
@@ -56,28 +67,36 @@ df <- merge(df_house,df_weather)
 ggplot(reshape2::melt(df,"time")) + geom_line(aes(time,value)) + facet_wrap(~variable,ncol=1,scales="free_y")
 
 # Training and validation datasets
-train_dates <- sample(unique(as.Date(df$time,"Europe/Madrid")),size = length(unique(as.Date(df$time,"Europe/Madrid")))*0.8,replace = F)
-val_dates <- unique(as.Date(df$time,"Europe/Madrid"))[!(unique(as.Date(df$time,"Europe/Madrid")) %in% train_dates)]
+all_dates <- sort(unique(as.Date(df$time,"Europe/Madrid")))
+eligible_dates <- all_dates[2:length(all_dates)]
+train_dates <- sample(eligible_dates,size = length(eligible_dates)*0.9,replace = F)
+val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
 
 # Optimize the alpha values of the low pass filters
 features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
-                 "alpha_BHI"=list(min=0,max=0.9,n=15,class="float"),
-                 "alpha_GHI"=list(min=0,max=0.9,n=15,class="float"),
+                 "alpha_BHI"=list(min=0,max=0,n=0,class="float"),
+                 "alpha_GHI"=list(min=0,max=0,n=0,class="float"),
                  "alpha_ws"=list(min=0,max=0.9,n=15,class="float"),
-                 "ar_hp_cons"=list(min=0,max=6,n=6,class="int"),
-                 "ar_tfloor"=list(min=1,max=6,n=5,class="int"),
-                 "ar_ti"=list(min=1,max=6,n=5,class="int"),
-                 "lags_te"=list(min=0,max=4,n=4,class="int"),
-                 "lags_ti"=list(min=0,max=4,n=4,class="int"),
-                 "lags_tfloor"=list(min=0,max=4,n=4,class="int"),
-                 "lags_GHI"=list(min=0,max=0,n=0,class="int"),
-                 "lags_BHI"=list(min=0,max=0,n=0,class="int"),
-                 "lags_humidity"=list(min=0,max=3,n=3,class="int"),
-                 "lags_infiltrations"=list(min=0,max=0,n=0,class="int"),
-                 "lags_hp_cons"=list(min=0,max=12,n=12,class="int"),
-                 "lags_hg"=list(min=0,max=6,n=6,class="int"),
-                 "sunAzimuth_nharmonics"=list(min=2,max=7,n=5,class="int"),
-                 "windBearing_nharmonics"=list(min=2,max=7,n=5,class="int")
+                 "mod_hp_cons_ar"=list(min=1,max=6,n=5,class="int"),
+                 "mod_hp_cons_lags_tfloor"=list(min=1,max=1,n=0,class="int"),
+                 "mod_hp_cons_lags_te"=list(min=0,max=0,n=0,class="int"),
+                 "mod_hp_cons_lags_humidity"=list(min=0,max=0,n=0,class="int"),
+                 "mod_tfloor_ar"=list(min=1,max=5,n=4,class="int"),
+                 "mod_tfloor_lags_hp_cons"=list(min=0,max=3,n=3,class="int"),
+                 "mod_tfloor_lags_dti"=list(min=0,max=0,n=0,class="int"),
+                 "mod_ti_ar"=list(min=1,max=5,n=4,class="int"),
+                 "mod_ti_lags_te"=list(min=0,max=3,n=3,class="int"),
+                 "mod_ti_lags_dti"=list(min=0,max=6,n=6,class="int"),
+                 "mod_ti_lags_GHI"=list(min=0,max=2,n=2,class="int"),
+                 "mod_ti_lags_BHI"=list(min=0,max=0,n=0,class="int"),
+                 "mod_ti_lags_infiltrations"=list(min=0,max=2,n=2,class="int"),
+                 "mod_ti_lags_humidity"=list(min=0,max=0,n=0,class="int"),
+                 "mod_ti_lags_ventilation"=list(min=0,max=0,n=0,class="int"),
+                 "mod_ti_lags_hg"=list(min=0,max=5,n=5,class="int"),
+                 "mod_ti_solar_gains"=list(min=0,max=2,n=2,class="int"),
+                 "mod_ti_infiltrations"=list(min=0,max=2,n=2,class="int"),
+                 "sunAzimuth_nharmonics"=list(min=2,max=5,n=3,class="int"),
+                 "windBearing_nharmonics"=list(min=2,max=5,n=3,class="int")
                  )
 optimization_results <- suppressMessages(
   ga(
@@ -94,13 +113,13 @@ optimization_results <- suppressMessages(
     train_dates = train_dates,
     val_dates = val_dates,
     popSize = 32,
-    maxiter = 8,
+    maxiter = 10,
     monitor = gaMonitor2,
     parallel = 8,
-    elitism = 0.1,
-    pmutation = 0.01)
+    elitism = 0.08,
+    pmutation = 0.05)
 )
-  
+
 params <- decodeValueFromBin(optimization_results@solution[1,],
                              mapply(function(i){i[['class']]},features), 
                              mapply(function(i){i[['n']]},features), 
@@ -117,6 +136,12 @@ mod_q <- result_q$mod
 mod_ti <- result_ti$mod
 mod_tfloor <- result_tfloor$mod
 df_mod <- result_ti$df
+cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values)
+cpgram(mod_ti$model$ti_l0-mod_ti$fitted.values)
+cpgram(mod_tfloor$model$tfloor_l0-mod_tfloor$fitted.values)
+summary(mod_tfloor)
+summary(mod_q)
+summary(mod_ti)
 
 # Validation of the models in 24h predictions
 predv <- prediction_scenario(
@@ -134,25 +159,36 @@ grid.arrange(
   ggplot(predv)+
     geom_line(aes(time,tfloor))+
     geom_line(aes(time,tfloor_l0),col=2)+
-    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x"),
+    geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
+    ylab("Supply temperature [ºC]")+
+    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+    scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+    theme_bw(),
   ggplot(predv)+
     geom_line(aes(time,ti))+
     geom_line(aes(time,ti_l0),col=2)+
-    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x"),
+    ylab("Indoor temperature [ºC]")+
+    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+    scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+    theme_bw(),
   ggplot(predv)+
     geom_line(aes(time,hp_cons))+
     geom_line(aes(time,hp_cons_l0),col=2)+
-    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x"), 
+    ylab("HP electricity [Wh]")+
+    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+    scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+    theme_bw(), 
   ncol=1
 )
-  
+
 #### TO Do!!!!
 
 # SH models plots
-plot_results(mod = mod_ti, plot_file = sprintf("results/%s_baxi_output_ti_%s.pdf",contractId,"%s"),
+dir.create("results")
+plot_results(mod = mod_ti, plot_file = sprintf("results/mod_ti.pdf"),
              value_column="ti_l0",value_repr=expression(Delta~"T"["t"]^"i"),
              value_repr_residuals=expression("T"["t"]^"i"-widehat("T"["t"]^"i")),
-             df = df_mod, height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
+             df = tune_model_input(df,params), height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
 plot_results(mod = mod_q, plot_file = sprintf("results/%s_baxi_output_q_%s.pdf",contractId,"%s"),
              value_column="value_l0",value_repr=expression(Delta~Phi["t"]^"h"),
              value_repr_residuals=expression(Phi["t"]^"h"-widehat(Phi["t"]^"h")),

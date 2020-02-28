@@ -56,6 +56,7 @@ lp_vector<- function(x, a1) {
 tune_model_input <- function(df,params){
   
   # Low pass filtering of the indoor and outdoor temperatures
+  df$te_raw <- df$te
   df$te <- lp_vector(df$te,params["alpha_te"])
   df$GHI <- lp_vector(df$GHI,params["alpha_GHI"])
   df$BHI <- lp_vector(df$BHI,params["alpha_BHI"])
@@ -63,32 +64,49 @@ tune_model_input <- function(df,params){
   
   # Lag the input columns and weather tranformations
     # HP consumption
-  for (l in 0:max(params[c("lags_hp_cons","ar_hp_cons","ar_tfloor")])){
+  for (l in 0:max(params[c("mod_tfloor_lags_hp_cons","mod_hp_cons_ar","mod_tfloor_ar")])){
     df[,paste0("hp_cons_l",l)] <- dplyr::lag(df[,"hp_cons"],l)
     df[,paste0("hp_status_l",l)] <- dplyr::lag(df[,"hp_status"],l)
     df[,paste0("hp_cop_l",l)] <- dplyr::lag(df[,"hp_cop"],l)
   }
   df[,"hp_tset_l0"] <- df[,"hp_tset"]
-  for (l in 0:max(params[c("lags_tfloor","ar_tfloor")])){
+  for (l in 0:max(params[c("mod_hp_cons_lags_tfloor","mod_ti_lags_dti","mod_tfloor_ar")])){
     df[,paste0("tfloor_l",l)] <- dplyr::lag(df[,"tfloor"],l)
   }
     # Weather and indoor comfort
-  for (l in 0:max(c(1,params[c("lags_te","lags_infiltrations")]))){
+  for (l in 0:max(c(1,params[c("mod_hp_cons_ar","mod_hp_cons_lags_te","mod_hp_cons_lags_humidity","mod_ti_lags_te","mod_hp_cons_lags_tfloor",
+                               "mod_ti_lags_infiltrations","mod_tfloor_lags_hp_cons")]))){
     df[,paste0("te_l",l)] <- dplyr::lag(df[,"te"],l)
+    df[,paste0("te_raw_l",l)] <- dplyr::lag(df[,"te_raw"],l)
   }
-  for (l in 0:max(c(1,params[c("ar_ti","lags_ti","lags_infiltrations")]))){
+  df$dtf <- df$tfloor - df$te
+  for (l in 0:max(c(1,params[c("mod_hp_cons_lags_tfloor")]))){
+    df[,paste0("dtf_l",l)] <- dplyr::lag(df[,"dtf"],l)
+  }
+  df$dti <- df$tfloor - df$ti
+  for (l in 0:max(c(1,params[c("mod_ti_ar","mod_ti_lags_dti","mod_ti_lags_infiltrations")]))){
     df[,paste0("ti_l",l)] <- dplyr::lag(df[,"ti"],l)
   }
-  for (l in 0:params["lags_hg"]){
+  for (l in 0:max(c(params[c("mod_ti_lags_dti","mod_tfloor_lags_dti")]))){
+    df[,paste0("dti_l",l)] <- dplyr::lag(df[,"dti"],l)
+  }
+  for (l in 0:params["mod_ti_lags_hg"]){
     df[,paste0("hg_l",l)] <- dplyr::lag(df[,"hg"],l)
   }
-  for (l in 0:params["lags_GHI"]){
+  for (l in 0:params["mod_ti_lags_GHI"]){
     df[,paste0("GHI_l",l)] <- dplyr::lag(df[,"GHI"],l)
   }
-  for (l in 0:params["lags_BHI"]){
+  for (l in 0:params["mod_ti_lags_BHI"]){
     df[,paste0("BHI_l",l)] <- dplyr::lag(df[,"BHI"],l)
   }
-  for (l in 0:max(params[c("lags_humidity")])){
+  for (l in 0:params["mod_ti_lags_ventilation"]){
+    df[,paste0("vent_l",l)] <- dplyr::lag(df[,"vent"],l)
+    # df[,paste0("air_h_l",l)] <- dplyr::lag(df[,"air_h"],l)
+    # df[,paste0("air_e_l",l)] <- dplyr::lag(df[,"air_e"],l)
+    # df[,paste0("air_s_l",l)] <- dplyr::lag(df[,"air_s"],l)
+  }
+  for (l in 0:max(params[c("mod_hp_cons_ar","mod_ti_lags_humidity","mod_hp_cons_lags_te",
+                           "mod_hp_cons_lags_humidity","mod_tfloor_lags_hp_cons")])){
     df[,paste0("humidity_l",l)] <- dplyr::lag(df[,"humidity"],l)
   }
   df$dte <- (rowMeans(data.frame(df$ti_l1,df$ti_l0)) - rowMeans(data.frame(df$te_l1,df$te_l0)))
@@ -96,7 +114,7 @@ tune_model_input <- function(df,params){
   # for (l in 0:params["lags_dte"]){
   #   df[,paste0("dte_l",l)] <- dplyr::lag(df[,"dte"],l)
   # }
-  for (l in 0:params["lags_infiltrations"]){
+  for (l in 0:params["mod_ti_lags_infiltrations"]){
     df[,paste0("infiltrations_l",l)] <- dplyr::lag(df[,"infiltrations"],l)
   }
 
@@ -105,7 +123,7 @@ tune_model_input <- function(df,params){
     df <- add_fourier_series_sunazimuth(df, sunAzimuth_nharmonics = params["sunAzimuth_nharmonics"], min_solarElevation=-1)
   }
   for(m in colnames(df)[grepl("^sunAzimuth_fs_",colnames(df))]){
-    for (l in 0:max(params[c("lags_GHI","lags_BHI")])){
+    for (l in 0:max(params[c("mod_ti_lags_GHI","mod_ti_lags_BHI")])){
       df[,gsub("fs",paste0("fs_l",l),m)] <- dplyr::lag(df[,m],l)
     }
   }
@@ -113,7 +131,7 @@ tune_model_input <- function(df,params){
     df <- add_fourier_series_windbearing(df, windBearing_nharmonics= params["windBearing_nharmonics"])
   }
   for(m in colnames(df)[grepl("^windBearing_fs_",colnames(df))]){
-    for (l in 0:params["lags_infiltrations"]){
+    for (l in 0:params["mod_ti_lags_infiltrations"]){
       df[,gsub("fs",paste0("fs_l",l),m)] <- dplyr::lag(df[,m],l)
     }
   }
@@ -145,9 +163,10 @@ add_fourier_series_sunazimuth <- function(df, sunAzimuth_nharmonics, min_solarEl
   #                      "max"=max(yearly_sun$azimuth[yearly_sun$altitude>min_solarElevation]))
   # sunAzimuth_01 <- normalize_range_int(ifelse(df$sunAzimuth==0,NA,df$sunAzimuth),0,1,specs = min_max_azimuth)
   
-  sunAzimuth_01 <- normalize_range_int(df$sunAz,0,1,specs = c("min"=0,"max"=360))
-
-  sunAzimuth_fs <- as.data.frame(fs(sunAzimuth_01, nharmonics=sunAzimuth_nharmonics))
+  sunAzimuth_01 <- normalize_range_int(df$sunAz,-0.5,0.5,specs = c("min"=0,"max"=360))
+  sunAzimuth_01 <- ifelse(sunAzimuth_01>0,sunAzimuth_01-0.5,sunAzimuth_01+0.5)
+  
+  sunAzimuth_fs <- as.data.frame(fs(sunAzimuth_01, nharmonics=sunAzimuth_nharmonics,pair_function = F))
   colnames(sunAzimuth_fs) <- paste0("sunAzimuth_fs_",colnames(sunAzimuth_fs))
   sunAzimuth_fs[is.na(sunAzimuth_fs)] <- 0
   df <- cbind(df,sunAzimuth_fs)
@@ -156,23 +175,14 @@ add_fourier_series_sunazimuth <- function(df, sunAzimuth_nharmonics, min_solarEl
   
 }
 
-add_fourier_series_dayhour <- function(df, dayhour_nharmonics) {
-  
-  # Fourier series of the windBearing
-  dayhour_fs <- as.data.frame(fs(df$dayhour_int/24, nharmonics=dayhour_nharmonics))
-  colnames(dayhour_fs) <- paste0("dayhour_fs_",colnames(dayhour_fs))
-  df <- cbind(df,dayhour_fs)
-  
-  return(df)
-  
-}
-
 add_fourier_series_windbearing <- function(df, windBearing_nharmonics) {
   
   # Fourier series of the windBearing
-  windBearing_01 <- normalize_range_int(df$windBearing,0,1,specs = c("min"=0,"max"=360))
+  windBearing_01 <- normalize_range_int(df$windBearing,-0.5,0.5,specs = c("min"=0,"max"=360))
+  #windBearing_01 <- normalize_range_int(0:360,-0.5,0.5,specs = c("min"=0,"max"=360))
+  windBearing_01 <- ifelse(windBearing_01>0,windBearing_01-0.5,windBearing_01+0.5)
   
-  windBearing_fs <- as.data.frame(fs(windBearing_01, nharmonics=windBearing_nharmonics))
+  windBearing_fs <- as.data.frame(fs(windBearing_01, nharmonics=windBearing_nharmonics,pair_function = F))
   colnames(windBearing_fs) <- paste0("windBearing_fs_",colnames(windBearing_fs))
   df <- cbind(df,windBearing_fs)
   
@@ -611,24 +621,32 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <-  as.formula(sprintf("ti_l0 ~ 
                                  0 + %s + %s + %s + %s",
-                                 paste0("ti_l",1:params["ar_ti"],"",collapse=" + "),
-                                 paste0("tfloor_l",0:(params["lags_tfloor"]),collapse=" + "),
-                                 paste0("te_l",0:(params["lags_te"]),"",collapse=" + "),
-                                 paste0("hg_l",0:(params["lags_hg"]),"",collapse=" + ")
+                                 paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),
+                                 paste0("tfloor_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
+                                 paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
+                                 paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + ")
+                                 #paste0("vent_l",0:(params["mod_ti_lags_ventilation"]),"",collapse=" + ")
   ))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
-  for (i in 0:params["lags_GHI"]){
-    sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
-    solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
-    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
+  if(params["mod_ti_solar_gains"]==1){
+    formula <- update.formula(formula,paste0(". ~ . +",paste0("GHI_l",0:params["mod_ti_lags_GHI"],"",collapse=" + ")))
+  } else if (params["mod_ti_solar_gains"]==2){
+    for (i in 0:params["mod_ti_lags_GHI"]){
+      sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
+      solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
+      formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
+    }
   }
-  
   # Define the windBearing fourier series terms and add the infiltration terms to the formula
-  for (i in 0:params["lags_infiltrations"]){#(params[3]-1)){#0){#
-    windBearing_fs_terms <- colnames(df)[grepl(paste0("^windBearing_fs_l",i),colnames(df))]
-    infiltrations_features <- lapply(windBearing_fs_terms,function(x){paste0("infiltrations_l",i,":",x)})
-    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(infiltrations_features,collapse=" + "))))
+  if(params["mod_ti_infiltrations"]==1){
+    formula <- update.formula(formula,paste0(". ~ . +",paste0("infiltrations_l",0:params["mod_ti_lags_infiltrations"],"",collapse=" + ")))
+  } else if (params["mod_ti_infiltrations"]==2){
+    for (i in 0:params["mod_ti_lags_infiltrations"]){#(params[3]-1)){#0){#
+      windBearing_fs_terms <- colnames(df)[grepl(paste0("^windBearing_fs_l",i),colnames(df))]
+      infiltrations_features <- lapply(windBearing_fs_terms,function(x){paste0("infiltrations_l",i,":",x)})
+      formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(infiltrations_features,collapse=" + "))))
+    }
   }
   
   mod <- lm(formula, data=df)
@@ -653,15 +671,20 @@ calculate_model_q <- function(params, df, train_dates, output="aic"){
   
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("hp_cons_l0 ~ 
-      0 + %s + %s + %s",
-      paste0("te_l",0:params["lags_te"],"",collapse=" + "),
-      paste0("tfloor_l",0:params["lags_tfloor"],"",collapse=" + "),
-      #paste0("ti_l",0:params["lags_dti"],"",collapse=" + "),
-      paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + ")
+      1 + %s + %s + %s",
+      paste0("bs(tfloor_l",0:params["mod_hp_cons_lags_tfloor"],")",collapse=" + "),
+      paste0(mapply(function(x){sprintf("bs(tfloor_l%s):bs(ti_l%s)",x,x)},1:1),collapse=" + "),
+      paste0("te_raw_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + ")
+      # paste0(mapply(function(x){sprintf("hp_cons_l%s:humidity_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
+      # paste0(mapply(function(x){sprintf("hp_cons_l%s:te_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
+      # paste0("hp_cons_l",1:params["mod_hp_cons_ar"],"",collapse=" + "),
+      # paste0("te_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + "),
+      # paste0("bs(dtf_l",0:params["mod_hp_cons_lags_tfloor"],")",collapse=" + "),
+      # paste0("bs(tfloor_l",0:params["mod_hp_cons_lags_tfloor"],")",collapse=" + "),
+      # #paste0("ti_l",0:params["lags_dti"],"",collapse=" + "),
+      # paste0("humidity_l",0:params["mod_hp_cons_lags_humidity"],"",collapse=" + ")
+      #paste0(mapply(function(x){sprintf("bs(te_l%s,knots=1,degree=2):bs(humidity_l%s,knots=1,degree=2)",x,x)},0:max(params[c("mod_hp_cons_lags_te","mod_hp_cons_lags_humidity")])),collapse=" + ")
   ))
-  if(params["ar_hp_cons"]>0){
-    formula <- update.formula(formula,paste0(". ~ . + ",paste0("hp_cons_l",1:params["ar_hp_cons"],"",collapse=" + ")))
-  }
   
   mod <- lm(formula, data=df[df$hp_status>0,])
   
@@ -686,8 +709,8 @@ calculate_model_tfloor <- function(params, df, train_dates, output="aic"){
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("tfloor_l0 ~ 
       0 + %s + %s",
-      paste0(mapply(function(x){sprintf("tfloor_l%s:as.factor(hp_status_l%s)",x,x)},1:params["ar_tfloor"]),collapse=" + "),
-      paste0("hp_cons_l",0:params["lags_hp_cons"],"",collapse=" + ")
+      paste0(mapply(function(x){sprintf("tfloor_l%s*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tfloor_ar"]),collapse=" + "),
+      paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tfloor_lags_hp_cons"]),collapse=" + ")
       #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
       #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
       #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
@@ -695,11 +718,11 @@ calculate_model_tfloor <- function(params, df, train_dates, output="aic"){
   ))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
-  for (i in 0:params["lags_GHI"]){
-    sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
-    solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
-    formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
-  }
+  # for (i in 0:params["lags_GHI"]){
+  #   sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
+  #   solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
+  #   formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
+  # }
   
   mod <- lm(formula, data=df)
   
@@ -883,14 +906,14 @@ plot_results <- function(mod, plot_file, value_column, value_repr, value_repr_re
     if (!("pdf" %in% names(dev.list()))){ pdf(sprintf(plot_file,"inputs"),width = 6,height = 10) }
     mod_df <- data.frame(
       "time"=df_case_train$time,
-      "ts"=df_case_train$ts_l0,
+      "BHI"=df_case_train$BHI,
       "ti"=df_case_train$ti_l0,
       "te"=df_case_train$te_l0,
-      "value"=df_case_train$value_l0,
-      "GHI"=df_case_train$GHI,
+      "tfloor"=df_case_train$tfloor_l0,
+      "hp_cons"=df_case_train$hp_cons_l0,
       "infiltrations"=df_case_train$infiltrations,
-      "dti"=df_case_train$dti,
-      "dte"=df_case_train$dte
+      "vent"=df_case_train$vent,
+      "hg"=df_case_train$hg
     )
     print(
       ggplot(reshape2::melt(pad(mod_df),id.vars=c("time"))) + 
@@ -898,14 +921,14 @@ plot_results <- function(mod, plot_file, value_column, value_repr, value_repr_re
         facet_wrap(~variable,nrow=8,scales="free_y") + theme_bw() +
         ylab("") + scale_color_brewer(palette = "Dark2",
           name = "", labels = c(
-            bquote("T"^"s"~"["*degree*"C]"),
+            bquote("I"^"sol"~"[W/"*"m"^"2"*"]"),
             bquote("T"^"i"~"["*degree*"C]"),
             bquote("T"^"e"~"["*degree*"C]"),
+            bquote("T"^"f"~"["*degree*"C]"),
             bquote(Phi^"h"~"[kWh]"),
-            bquote("I"^"sol"~"[W/"*"m"^"2"*"]"),
-            bquote("W"^"s"*"·"*Psi~"[m"*degree*"C"*"/s]"),
-            bquote(Theta~"["*degree*"C]"),
-            bquote(Psi~"["*degree*"C]"))
+            bquote("V"^"i"~"[m/s·"*degree*"C]"),
+            bquote("V"^"a"~"[m"^"3"*"/h·"*degree*"C]"),
+            bquote("G"^"h"~"[W]"))
           )+
         theme(text= element_text(size=15, family="CM Roman"),
               axis.text = element_text(size=15, family="CM Roman"),
@@ -1293,21 +1316,36 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NU
         # floor temperatures estimated with free floating conditions
         } else {
           df_$hp_cons_l0[i] <- 0
+          df_$hp_status_l0[i] <- 0
+          df_$hp_tset_l0[i] <- NA
           df_$tfloor_l0[i] <- tfloor_ff
           df_$ti_l0[i] <- ti_ff
         }
       }
       
       # Reassign the ti calculated values to next timesteps lagged values
-      for (l in 1:max(params[c("ar_tfloor","lags_tfloor")])){
+      for (l in 1:max(params[c("mod_tfloor_ar","mod_hp_cons_lags_tfloor","mod_ti_lags_dti")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tfloor_l",l)] <- df_$tfloor_l0[i]}}, error=function(e){next})
       }
-      for (l in 1:max(params[c("ar_hp_cons","lags_hp_cons")])){
+      for (l in 1:max(params[c("mod_hp_cons_ar","mod_tfloor_lags_hp_cons","mod_tfloor_ar")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
       }
-      for (l in 1:max(params[c("ar_ti","lags_ti")])){
+      for (l in 1:max(params[c("mod_ti_ar","mod_ti_lags_infiltrations")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}}, error=function(e){next})
+      }
+      df$dti[i] <- df$ti_l0[i] - df$tfloor_l0[i]
+      for (l in 1:max(c(params[c("mod_ti_lags_dti","mod_tfloor_lags_dti")]))){
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dti_l",l)] <- df_$dti_l0[i]}}, error=function(e){next})
+      }
+      df$dte_l0[i] <- (rowMeans(data.frame(df$ti_l1[i],df$ti_l0[i])) - rowMeans(data.frame(df$te_l1[i],df$te_l0[i])))
+      df$infiltrations_l0[i] <- ifelse(df$dte_l0[i]>0,df$dte_l0[i],0) * df$windSpeed[i]
+      for (l in 1:max(c(params[c("mod_ti_lags_infiltrations")]))){
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("infiltrations_l",l)] <- df_$infiltrations_l0[i]}}, error=function(e){next})
+      }
+      df$dtf_l0[i] <- df$tfloor_l0[i] - df$te_l0[i]
+      for (l in 1:max(c(params[c("mod_hp_cons_lags_tfloor")]))){
+        tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dtf_l",l)] <- df_$dtf_l0[i]}}, error=function(e){next})
       }
     }
   
@@ -1507,12 +1545,12 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
     tfloor_diff <- rmserr(predv$tfloor[is.finite(predv$tfloor)],predv$tfloor_l0[is.finite(predv$tfloor)])$rmse
     
     # # Autocorrelations
-    # a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = T)
-    # inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    # a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = T)
-    # inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    # a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = T)
-    # inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+    a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = T)
+    inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+    a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = T)
+    inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+    a <- acf(mod_tfloor$model$tfloor_l0-mod_tfloor$fitted.values,plot = T)
+    inc_tfloor <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
     #
     # # Impulse responses
     # mod_ti_te <- sum(abs(plot_irf(mod_ti$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
@@ -1521,9 +1559,18 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
     # mod_q_dti <- sum(abs(plot_irf(mod_q$coefficients,24,"^dti_l",plot = F,exhogenous_coeff = T)$value)>10)
     # mod_q_te <- sum(abs(plot_irf(mod_q$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
     
+    # Percentage pvalue < 0.05 to all variables
+    pval_q <- 1-(sum(summary(mod_q)$coef[,4]<=0.05) / nrow(summary(mod_q)$coef))
+    pval_ti <- 1-(sum(summary(mod_ti)$coef[,4]<=0.05) / nrow(summary(mod_ti)$coef))
+    pval_tfloor <- 1-(sum(summary(mod_tfloor)$coef[,4]<=0.05) / nrow(summary(mod_tfloor)$coef))
+    
     score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
-      -ti_diff*q_diff*tfloor_diff
+      -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
+      q_diff*inc_q*(1+params["mod_hp_cons_ar"]*0.1) + 
+      tfloor_diff*inc_tfloor*2*(1+params["mod_tfloor_ar"]*0.1) ) * (
+        mean(pval_q,pval_ti,pval_tfloor)
+      )
     if (is.finite(score)){
       return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
     } else {return(-10000000000000)}
-  }
+}
