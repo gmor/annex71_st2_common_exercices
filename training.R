@@ -98,6 +98,7 @@ features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "sunAzimuth_nharmonics"=list(min=2,max=5,n=3,class="int"),
                  "windBearing_nharmonics"=list(min=2,max=5,n=3,class="int")
                  )
+
 optimization_results <- suppressMessages(
   ga(
     type = "binary",

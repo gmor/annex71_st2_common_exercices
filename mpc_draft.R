@@ -54,22 +54,17 @@
 
 df_ <- df
 
-date_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC") 
-rows_to_filter = seq(from = date_to_predict - days(1), to = date_to_predict - hours(1), by = "hour")
-df <- df[df$time %in% rows_to_filter, ]
-# inicialize both vectors to optimize 
-# range of hp_tset: [28, 45]
-# range of hp_tset: [0, 1]
-min_hp_tset <- 28
-max_hp_tset <- 45
+# inicialize range for tset  
+min_hp_tset <- min(df$hp_tset)
+max_hp_tset <- max(df$hp_tset) 
 
-df$hp_tset <- rep(x = 36, times = 24)
-df$hp_status <- rep(x = 0, times = 24)
+# date_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC") 
+# rows_to_filter = seq(from = date_to_predict - days(1), to = date_to_predict - hours(1), by = "hour")
+# df <- df[df$time %in% rows_to_filter, ]
 
 df_price <- read_excel_allsheets("data/electricity_price.xlsx")$Sheet1
 colnames(df_price) <- c("daytime", "price")
 df_price$daytime <- c(0:23)
-
 
 features <- list("0"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
                  "1"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
@@ -97,13 +92,12 @@ features <- list("0"=list(levels = c(as.character(seq(from = min_hp_tset, to = m
                  "23"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete")
                  )
 
-optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, 
-                          names_per_feature, df, mod_q, mod_ti, mod_tfloor, df_price, levels_per_feature){
+optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
+                          df, mod_q, mod_ti, mod_tfloor, df_price, time_to_predict, params){
   
   #X=sample(c(0,1),nBits,replace=T)
-  # should include the new class "discrete" inside this function
-  params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
-  names(params) <- names_per_feature
+  params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
+  names(params_hp_tset_24h) <- names_per_feature
 
   # the predicted variables will be tagged as "_0" 
   predv <- prediction_scenario(
@@ -111,33 +105,32 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature,
     mod_ti = mod_ti,
     mod_tfloor = mod_tfloor,
     df = df,
-    rows_to_filter = rep(x = TRUE, times = 24),
-    hp_tset_24h = params, #ifelse(df$hp_status==0,NA,df$hp_tset),
+    rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict),
+    hp_tset_24h = params_hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
     params = params,
     ts_prediction = NULL
   )
   
-  # constrains:
-  if (condition) {
-    # max and min range (comfort bands) for ti defined based on the time of the day
-    temp_min = c(rep(x = 20, times = 12), rep(x = 17, times = 12))
-    temp_max = c(rep(x = 28, times = 12), rep(x = 25, times = 12))
-    # should repeat this for the tfloor?
-  }
+  # # constrains:
+  # if (condition) {
+  #   # max and min range (comfort bands) for ti defined based on the time of the day
+  #   temp_min = c(rep(x = 20, times = 12), rep(x = 17, times = 12))
+  #   temp_max = c(rep(x = 28, times = 12), rep(x = 25, times = 12))
+  #   # should repeat this for the tfloor?
+  # }
   
   # cost function:
   # sum over 24 hours
   # check units (in price is euro/MWh and consumption dont know if is MWh or kWh)??
   score <- sum(df_price$price*predv$hp_cons_l0)
 
-    
   if (is.finite(score)){
     return(score)
   } else {return(-10000000000000)}
-  
 }
 
-
+# for example:
+time_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC") 
 
 ga(
   type = "binary",
@@ -147,19 +140,21 @@ ga(
   nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features),
   levels_per_feature = lapply(function(i){i[["levels"]]}, X = features), 
   names_per_feature = names(features),
+  time_to_predict = time_to_predict,
+  params = params,
+  mod_q = mod_q,
+  mod_ti = mod_ti,
+  mod_tfloor = mod_tfloor,
+  df_price = df_price,
   selection = gabin_tourSelection,
   df = df,
-  train_dates = train_dates,
-  val_dates = val_dates,
   popSize = 32,
   maxiter = 10,
   monitor = gaMonitor2,
   parallel = 8,
   elitism = 0.08,
-  pmutation = 0.05)
+  pmutation = 0.05
 )
 
-features 
-  
-  
+# TODO: arent we using the measured consumption to do the prediction_  
   
