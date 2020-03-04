@@ -120,11 +120,11 @@ optimization_results <- suppressMessages(
     pmutation = 0.05)
 )
 
-params <- decodeValueFromBin(optimization_results@solution[1,],
-                             mapply(function(i){i[['class']]},features), 
-                             mapply(function(i){i[['n']]},features), 
-                             mapply(function(i){i[['min']]},features), 
-                             mapply(function(i){i[['max']]},features))
+params <- decodeValueFromBin(binary_representation = optimization_results@solution[1,],
+                             class_per_feature = mapply(function(i){i[['class']]},features), 
+                             nclasses_per_feature = mapply(function(i){i[['n']]},features),
+                             min_per_feature = mapply(function(i){i[['min']]},features),
+                             max_per_feature = mapply(function(i){i[['max']]},features))
 names(params) <- names(features)
 print(params)
 
@@ -183,99 +183,99 @@ grid.arrange(
 
 #### TO Do!!!!
 
-# SH models plots
-dir.create("results")
-plot_results(mod = mod_ti, plot_file = sprintf("results/mod_ti.pdf"),
-             value_column="ti_l0",value_repr=expression(Delta~"T"["t"]^"i"),
-             value_repr_residuals=expression("T"["t"]^"i"-widehat("T"["t"]^"i")),
-             df = tune_model_input(df,params), height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
-plot_results(mod = mod_q, plot_file = sprintf("results/%s_baxi_output_q_%s.pdf",contractId,"%s"),
-             value_column="value_l0",value_repr=expression(Delta~Phi["t"]^"h"),
-             value_repr_residuals=expression(Phi["t"]^"h"-widehat(Phi["t"]^"h")),
-             df = df_mod, height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
-
-
-    write.csv(broom::tidy(mod_ti),sprintf("results/%s_mod_ti_summary_coefficients.csv",contractId),row.names = F)
-    write.csv(
-      cbind(
-        broom::glance(mod_ti),
-        as.data.frame(t(unlist(rmserr(mod_ti$fitted.values,mod_ti$model$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
-        as.data.frame(t(unlist(rmserr(val_ti$ti,val_ti$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
-        t(params)
-      ),
-      sprintf("results/%s_mod_ti_summary_accuracy.csv",contractId),row.names = F
-    )
-    
-    write.csv(broom::tidy(mod_q),sprintf("results/%s_mod_q_summary_coefficients.csv",contractId),row.names = F)
-    write.csv(
-      cbind(
-        broom::glance(mod_q),
-        as.data.frame(t(unlist(rmserr(mod_q$fitted.values,mod_q$model$value_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
-        as.data.frame(t(unlist(rmserr(val_q$value,val_q$value_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
-        t(params)
-      ),
-      sprintf("results/%s_mod_q_summary_accuracy.csv",contractId),row.names = F
-    )
-    
-    colnames(val_ti) <- c("time","real","predicted")
-    colnames(val_q) <- c("time","real","predicted")
-    pvalti <- ggplot(reshape2::melt(pad(val_ti),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
-      theme(text= element_text(size=15, family="CM Roman"),
-            axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
-            axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
-            strip.background = element_blank(),legend.title = element_blank(),
-            strip.text.x = element_blank()) + 
-      scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote("T"^"i"),bquote(widehat("T"^"i")))) +
-      ylab(bquote(degree*"C"))
-    pvalq <- ggplot(reshape2::melt(pad(val_q),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
-      theme(text= element_text(size=15, family="CM Roman"),
-            axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
-            axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
-            strip.background = element_blank(),legend.title = element_blank(),
-            strip.text.x = element_blank()) + 
-      scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote(Phi^"h"),bquote(widehat(Phi^"h")))) +
-      ylab(bquote("kWh"))
-    pdf(sprintf("results/%s_accuracy_validation.pdf",contractId),width=7,height = 3)
-    print(plot_grid(plotlist = list(pvalti,pvalq),ncol = 1,align = T))
-    dev.off()
-    embed_fonts(sprintf("results/%s_accuracy_validation.pdf",contractId),outfile=sprintf("results/%s_accuracy_validation.pdf",contractId))
-    
-    # Results
-    result <- data.frame(contractId,t(results_multiple_setpoints[["summary"]]),
-                         temp_off,temp_comfort,
-                         t(unlist(rmserr(mod_q$model$value_l0,mod_q$fitted.values))),
-                         t(unlist(rmserr(mod_ti$model$ti_l0,mod_ti$fitted.values))))
-    colnames(result) <-
-      c("contractId","case","q_real","q_pred","savings","temp_off","temp_comfort",
-        "q_train_mae","q_train_mse","q_train_rmse","q_train_mape","q_train_nmse","q_train_rstd",
-        "ti_train_mae","ti_train_mse","ti_train_rmse","ti_train_mape","ti_train_nmse","ti_train_rstd")
-    
-    # # Real-predicted model comparison
-    # predv <- results_multiple_setpoints$df[results_multiple_setpoints$df$setpoint_name=="real",]
-    # predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","ti_l0","setpoint_name")],c("time","setpoint_name")))
-    # temp_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
-    #   theme_bw()
-    # predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","value_l0","setpoint_name")],c("time","setpoint_name")))
-    # value_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
-    #   theme_bw()
-    # plot_grid(plotlist = list(temp_scenarios,value_scenarios))
-    
-    # # plot_residuals(value_repr = "Temperature",residuals = predv$ti-predv$ti_l0)
-    # plotly::ggplotly(ggplot(predv) + geom_line(aes(time,ti)) + geom_line(aes(time,ti_l0),col="red"))
-    # # plot_residuals(value_repr = "Consumption",residuals = predv$value-predv$value_l0)
-    # plotly::ggplotly(ggplot(predv) + geom_line(aes(time,value)) + geom_line(aes(time,value_l0),col="red"))
-    # 
-    # # Plot the real value and the predicted value by the model
-    # df_mod$pred <- ifelse(df_mod$status==1,predict(mod_q,df_mod),0)
-    # df_mod <- pad(df_mod)
-    # ggplot(df_mod)+
-    #   geom_line(aes(time,value_l0),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
-    # df_mod$pred <- predict(mod_ti,df_mod)
-    # ggplot(df_mod)+
-    #   geom_line(aes(time,ti),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
-  }
-  return(result)
-  },error=function(e){return(NULL)})
-})
-
-write.csv(do.call(rbind,all_contracts_results),"results/savings.csv",row.names = F)
+# # SH models plots
+# dir.create("results")
+# plot_results(mod = mod_ti, plot_file = sprintf("results/mod_ti.pdf"),
+#              value_column="ti_l0",value_repr=expression(Delta~"T"["t"]^"i"),
+#              value_repr_residuals=expression("T"["t"]^"i"-widehat("T"["t"]^"i")),
+#              df = tune_model_input(df,params), height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
+# plot_results(mod = mod_q, plot_file = sprintf("results/%s_baxi_output_q_%s.pdf",contractId,"%s"),
+#              value_column="value_l0",value_repr=expression(Delta~Phi["t"]^"h"),
+#              value_repr_residuals=expression(Phi["t"]^"h"-widehat(Phi["t"]^"h")),
+#              df = df_mod, height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
+# 
+# 
+#     write.csv(broom::tidy(mod_ti),sprintf("results/%s_mod_ti_summary_coefficients.csv",contractId),row.names = F)
+#     write.csv(
+#       cbind(
+#         broom::glance(mod_ti),
+#         as.data.frame(t(unlist(rmserr(mod_ti$fitted.values,mod_ti$model$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
+#         as.data.frame(t(unlist(rmserr(val_ti$ti,val_ti$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
+#         t(params)
+#       ),
+#       sprintf("results/%s_mod_ti_summary_accuracy.csv",contractId),row.names = F
+#     )
+#     
+#     write.csv(broom::tidy(mod_q),sprintf("results/%s_mod_q_summary_coefficients.csv",contractId),row.names = F)
+#     write.csv(
+#       cbind(
+#         broom::glance(mod_q),
+#         as.data.frame(t(unlist(rmserr(mod_q$fitted.values,mod_q$model$value_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
+#         as.data.frame(t(unlist(rmserr(val_q$value,val_q$value_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
+#         t(params)
+#       ),
+#       sprintf("results/%s_mod_q_summary_accuracy.csv",contractId),row.names = F
+#     )
+#     
+#     colnames(val_ti) <- c("time","real","predicted")
+#     colnames(val_q) <- c("time","real","predicted")
+#     pvalti <- ggplot(reshape2::melt(pad(val_ti),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
+#       theme(text= element_text(size=15, family="CM Roman"),
+#             axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
+#             axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
+#             strip.background = element_blank(),legend.title = element_blank(),
+#             strip.text.x = element_blank()) + 
+#       scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote("T"^"i"),bquote(widehat("T"^"i")))) +
+#       ylab(bquote(degree*"C"))
+#     pvalq <- ggplot(reshape2::melt(pad(val_q),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
+#       theme(text= element_text(size=15, family="CM Roman"),
+#             axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
+#             axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
+#             strip.background = element_blank(),legend.title = element_blank(),
+#             strip.text.x = element_blank()) + 
+#       scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote(Phi^"h"),bquote(widehat(Phi^"h")))) +
+#       ylab(bquote("kWh"))
+#     pdf(sprintf("results/%s_accuracy_validation.pdf",contractId),width=7,height = 3)
+#     print(plot_grid(plotlist = list(pvalti,pvalq),ncol = 1,align = T))
+#     dev.off()
+#     embed_fonts(sprintf("results/%s_accuracy_validation.pdf",contractId),outfile=sprintf("results/%s_accuracy_validation.pdf",contractId))
+#     
+#     # Results
+#     result <- data.frame(contractId,t(results_multiple_setpoints[["summary"]]),
+#                          temp_off,temp_comfort,
+#                          t(unlist(rmserr(mod_q$model$value_l0,mod_q$fitted.values))),
+#                          t(unlist(rmserr(mod_ti$model$ti_l0,mod_ti$fitted.values))))
+#     colnames(result) <-
+#       c("contractId","case","q_real","q_pred","savings","temp_off","temp_comfort",
+#         "q_train_mae","q_train_mse","q_train_rmse","q_train_mape","q_train_nmse","q_train_rstd",
+#         "ti_train_mae","ti_train_mse","ti_train_rmse","ti_train_mape","ti_train_nmse","ti_train_rstd")
+#     
+#     # # Real-predicted model comparison
+#     # predv <- results_multiple_setpoints$df[results_multiple_setpoints$df$setpoint_name=="real",]
+#     # predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","ti_l0","setpoint_name")],c("time","setpoint_name")))
+#     # temp_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
+#     #   theme_bw()
+#     # predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","value_l0","setpoint_name")],c("time","setpoint_name")))
+#     # value_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
+#     #   theme_bw()
+#     # plot_grid(plotlist = list(temp_scenarios,value_scenarios))
+#     
+#     # # plot_residuals(value_repr = "Temperature",residuals = predv$ti-predv$ti_l0)
+#     # plotly::ggplotly(ggplot(predv) + geom_line(aes(time,ti)) + geom_line(aes(time,ti_l0),col="red"))
+#     # # plot_residuals(value_repr = "Consumption",residuals = predv$value-predv$value_l0)
+#     # plotly::ggplotly(ggplot(predv) + geom_line(aes(time,value)) + geom_line(aes(time,value_l0),col="red"))
+#     # 
+#     # # Plot the real value and the predicted value by the model
+#     # df_mod$pred <- ifelse(df_mod$status==1,predict(mod_q,df_mod),0)
+#     # df_mod <- pad(df_mod)
+#     # ggplot(df_mod)+
+#     #   geom_line(aes(time,value_l0),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
+#     # df_mod$pred <- predict(mod_ti,df_mod)
+#     # ggplot(df_mod)+
+#     #   geom_line(aes(time,ti),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
+#   }
+#   return(result)
+#   },error=function(e){return(NULL)})
+# })
+# 
+# write.csv(do.call(rbind,all_contracts_results),"results/savings.csv",row.names = F)

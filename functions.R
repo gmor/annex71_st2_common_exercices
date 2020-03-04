@@ -1363,7 +1363,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NU
 ###
 
 decodeValueFromBin <- function(binary_representation, class_per_feature, nclasses_per_feature, 
-                               levels_per_feature =NULL, min_per_feature = NULL, max_per_feature = NULL){
+                               levels_per_feature = NULL, min_per_feature = NULL, max_per_feature = NULL){
   
   bitOrders <- mapply(function(x) { nchar(toBin(x)) }, nclasses_per_feature)
   #binary_representation <- X
@@ -1379,6 +1379,15 @@ decodeValueFromBin <- function(binary_representation, class_per_feature, nclasse
                                 (max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])
                               }else{1}
              )[orders[x]+1]),
+             
+             "int"= floor(seq(min_per_feature[x],max_per_feature[x],
+                              by=if(nclasses_per_feature[x]>0){
+                                (max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])
+                              }else{1}
+             )[orders[x]+1]),
+             
+             
+             
              "float"= seq(min_per_feature[x],max_per_feature[x],
                           by=if(nclasses_per_feature[x]>0){
                             (max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])
@@ -1517,8 +1526,9 @@ rmserr <- function (x, y, summary = FALSE){
 optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_feature, min_per_feature, 
                                        max_per_feature, names_per_feature, df, train_dates, val_dates){
     #X=sample(c(0,1),nBits,replace=T)
-    params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, min_per_feature, 
-                                 max_per_feature)
+
+    params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, min_per_feature = min_per_feature, 
+                                 max_per_feature = max_per_feature)
     names(params) <- names_per_feature
     
     # Training of the models
