@@ -710,7 +710,8 @@ calculate_model_tfloor <- function(params, df, train_dates, output="aic"){
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("tfloor_l0 ~ 
       0 + %s + %s",
-      paste0(mapply(function(x){sprintf("bs(tfloor_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tfloor_ar"]),collapse=" + "),
+      # paste0(mapply(function(x){sprintf("bs(tfloor_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tfloor_ar"]),collapse=" + "),
+      paste0(mapply(function(x){sprintf("bs(tfloor_l%s)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tfloor_ar"]),collapse=" + "),
       paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tfloor_lags_hp_cons"]),collapse=" + ")
       #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
       #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
