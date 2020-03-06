@@ -69,7 +69,10 @@ ggplot(reshape2::melt(df,"time")) + geom_line(aes(time,value)) + facet_wrap(~var
 # Training and validation datasets
 all_dates <- sort(unique(as.Date(df$time,"Europe/Madrid")))
 eligible_dates <- all_dates[2:length(all_dates)]
-train_dates <- sample(eligible_dates,size = length(eligible_dates)*0.9,replace = F)
+# train_dates <- sample(eligible_dates,size = length(eligible_dates)*0.9,replace = F)
+# val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
+
+train_dates <- eligible_dates[1:floor(length(eligible_dates)*0.75)]
 val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
 
 # Optimize the alpha values of the low pass filters

@@ -52,8 +52,6 @@
 # 
 # MPC:
 
-df_ <- df
-
 # inicialize range for tset  
 min_hp_tset <- min(df$hp_tset)
 max_hp_tset <- max(df$hp_tset) 
@@ -92,69 +90,56 @@ features <- list("0"=list(levels = c(as.character(seq(from = min_hp_tset, to = m
                  "23"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete")
                  )
 
-optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tfloor, df_price, time_to_predict, params){
-  
-  #X=sample(c(0,1),nBits,replace=T)
-  params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
-  names(params_hp_tset_24h) <- names_per_feature
-
-  # the predicted variables will be tagged as "_0" 
-  predv <- prediction_scenario(
-    mod_q = mod_q, 
-    mod_ti = mod_ti,
-    mod_tfloor = mod_tfloor,
-    df = df,
-    rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict),
-    hp_tset_24h = params_hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
-    params = params,
-    ts_prediction = NULL
-  )
-  
-  # # constrains:
-  # if (condition) {
-  #   # max and min range (comfort bands) for ti defined based on the time of the day
-  #   temp_min = c(rep(x = 20, times = 12), rep(x = 17, times = 12))
-  #   temp_max = c(rep(x = 28, times = 12), rep(x = 25, times = 12))
-  #   # should repeat this for the tfloor?
-  # }
-  
-  # cost function:
-  # sum over 24 hours
-  # check units (in price is euro/MWh and consumption dont know if is MWh or kWh)??
-  score <- sum(df_price$price*predv$hp_cons_l0)
-
-  if (is.finite(score)){
-    return(score)
-  } else {return(-10000000000000)}
-}
 
 # for example:
-time_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC") 
+time_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC")
+# there is a problem with the base spline of tfloor_l0 when doing the predict of mod_q
 
-ga(
-  type = "binary",
-  fitness = optimizer_MPC,
-  nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features))),
-  class_per_feature = mapply(function(i){i[['class']]},features),
-  nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features),
-  levels_per_feature = lapply(function(i){i[["levels"]]}, X = features), 
-  names_per_feature = names(features),
-  time_to_predict = time_to_predict,
-  params = params,
-  mod_q = mod_q,
-  mod_ti = mod_ti,
-  mod_tfloor = mod_tfloor,
-  df_price = df_price,
-  selection = gabin_tourSelection,
-  df = df,
-  popSize = 32,
-  maxiter = 10,
-  monitor = gaMonitor2,
-  parallel = 8,
-  elitism = 0.08,
-  pmutation = 0.05
+# df_original <- df
+# df <- df_original
+
+optimization_results <- suppressMessages(
+  ga(
+    type = "binary",
+    fitness = optimizer_MPC,
+    nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features))),
+    class_per_feature = mapply(function(i){i[['class']]},features),
+    nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features),
+    levels_per_feature = lapply(function(i){i[["levels"]]}, X = features), 
+    names_per_feature = names(features),
+    time_to_predict = time_to_predict,
+    params = params,
+    mod_q = mod_q,
+    mod_ti = mod_ti,
+    mod_tfloor = mod_tfloor,
+    df_price = df_price,
+    selection = gabin_tourSelection,
+    df = df,
+    popSize = 32,
+    maxiter = 10,
+    monitor = gaMonitor2,
+    parallel = 8,
+    elitism = 0.08,
+    pmutation = 0.05
+  )
 )
 
+params_hp_tset_24h <- decodeValueFromBin(binary_representation = optimization_results@solution[1,],
+                                         class_per_feature = mapply(function(i){i[['class']]},features),
+                                         nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features),
+                                         levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
+                                         )
+
+names(params) <- names(features)
+print(params)
+
+
+
+
 # TODO: arent we using the measured consumption to do the prediction_  
-  
+
+
+
+
+
+

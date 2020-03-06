@@ -64,7 +64,7 @@ tune_model_input <- function(df,params){
   
   # Lag the input columns and weather tranformations
     # HP consumption
-  for (l in 0:max(params[c("mod_tfloor_lags_hp_cons","mod_hp_cons_ar","mod_tfloor_ar")])){
+  for (l in 0:max(params[c("mod_tfloor_lags_hp_cons","mod_hp_cons_ar","mod_tfloor_ar","mod_ti_lags_dti")])){
     df[,paste0("hp_cons_l",l)] <- dplyr::lag(df[,"hp_cons"],l)
     df[,paste0("hp_status_l",l)] <- dplyr::lag(df[,"hp_status"],l)
     df[,paste0("hp_cop_l",l)] <- dplyr::lag(df[,"hp_cop"],l)
@@ -622,7 +622,8 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
   formula <-  as.formula(sprintf("ti_l0 ~ 
                                  0 + %s + %s + %s + %s",
                                  paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),
-                                 paste0("tfloor_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
+                                 paste0(mapply(function(x){sprintf("tfloor_l%s:as.factor(hp_status_l%s)",x,x)},0:params["mod_ti_lags_dti"]),collapse=" + "),
+                                 #paste0("tfloor_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
                                  paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
                                  paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + ")
                                  #paste0("vent_l",0:(params["mod_ti_lags_ventilation"]),"",collapse=" + ")
@@ -630,11 +631,11 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
   if(params["mod_ti_solar_gains"]==1){
-    formula <- update.formula(formula,paste0(". ~ . +",paste0("GHI_l",0:params["mod_ti_lags_GHI"],"",collapse=" + ")))
+    formula <- update.formula(formula,paste0(". ~ . +",paste0("BHI_l",0:params["mod_ti_lags_BHI"],"",collapse=" + ")))
   } else if (params["mod_ti_solar_gains"]==2){
-    for (i in 0:params["mod_ti_lags_GHI"]){
+    for (i in 0:params["mod_ti_lags_BHI"]){
       sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
-      solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("GHI_l",i,":",x)})
+      solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("BHI_l",i,":",x)})
       formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
     }
   }
@@ -709,7 +710,7 @@ calculate_model_tfloor <- function(params, df, train_dates, output="aic"){
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("tfloor_l0 ~ 
       0 + %s + %s",
-      paste0(mapply(function(x){sprintf("tfloor_l%s*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tfloor_ar"]),collapse=" + "),
+      paste0(mapply(function(x){sprintf("bs(tfloor_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tfloor_ar"]),collapse=" + "),
       paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tfloor_lags_hp_cons"]),collapse=" + ")
       #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
       #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
@@ -1294,12 +1295,12 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NU
     df_$ts_prediction <- ts_
     
     # Assign the control variables of the scenario
-    df_$hp_tset_l0 <- hp_tset_24h[df$time %in% df_$time]
+    df_$hp_tset_l0 <- as.numeric(hp_tset_24h[df$time %in% df_$time])
     df_$hp_status_l0 <- ifelse(is.na(hp_tset_24h[df$time %in% df_$time]),0,1)
     
     # Iterate for each timestep (1 hour)
     for (i in 1:nrow(df_)){
-      #i=2
+      #i=12
       # Calculate the floor temperature and indoor temperature under free floating conditions
       df_$hp_cons_l0[i] <- 0
       tfloor_ff <- df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
@@ -1327,7 +1328,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NU
       for (l in 1:max(params[c("mod_tfloor_ar","mod_hp_cons_lags_tfloor","mod_ti_lags_dti")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tfloor_l",l)] <- df_$tfloor_l0[i]}}, error=function(e){next})
       }
-      for (l in 1:max(params[c("mod_hp_cons_ar","mod_tfloor_lags_hp_cons","mod_tfloor_ar")])){
+      for (l in 1:max(params[c("mod_hp_cons_ar","mod_tfloor_lags_hp_cons","mod_tfloor_ar","mod_ti_lags_dti")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
       }
@@ -1379,15 +1380,6 @@ decodeValueFromBin <- function(binary_representation, class_per_feature, nclasse
                                 (max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])
                               }else{1}
              )[orders[x]+1]),
-             
-             "int"= floor(seq(min_per_feature[x],max_per_feature[x],
-                              by=if(nclasses_per_feature[x]>0){
-                                (max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])
-                              }else{1}
-             )[orders[x]+1]),
-             
-             
-             
              "float"= seq(min_per_feature[x],max_per_feature[x],
                           by=if(nclasses_per_feature[x]>0){
                             (max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])
@@ -1586,3 +1578,46 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
       return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
     } else {return(-10000000000000)}
 }
+
+optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
+                          df, mod_q, mod_ti, mod_tfloor, df_price, time_to_predict, params){
+  
+  #X=sample(c(0,1),nBits,replace=T)
+  params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
+  names(params_hp_tset_24h) <- names_per_feature
+  
+  rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
+  hp_tset_24h = numeric(nrow(df))
+  hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
+  
+  # the predicted variables will be tagged as "_0" 
+  predv <- prediction_scenario(
+    mod_q = mod_q, 
+    mod_ti = mod_ti,
+    mod_tfloor = mod_tfloor,
+    df = df,
+    rows_to_filter = rows_to_filter,
+    hp_tset_24h = hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
+    params = params,
+    ts_prediction = NULL
+  )
+  
+  # # constrains:
+  # if (condition) {
+  #   # max and min range (comfort bands) for ti defined based on the time of the day
+  #   temp_min = c(rep(x = 20, times = 12), rep(x = 17, times = 12))
+  #   temp_max = c(rep(x = 28, times = 12), rep(x = 25, times = 12))
+  #   # should repeat this for the tfloor?
+  # }
+  
+  # cost function:
+  # sum over 24 hours
+  # check units (in price is euro/MWh and consumption dont know if is MWh or kWh)??
+  score <- sum(df_price$price*predv$hp_cons_l0)
+  
+  if (is.finite(score)){
+    return(score)
+  } else {return(-10000000000000)}
+}
+
+
