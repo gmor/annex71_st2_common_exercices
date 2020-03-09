@@ -56,10 +56,6 @@
 min_hp_tset <- min(df$hp_tset)
 max_hp_tset <- max(df$hp_tset) 
 
-# date_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC") 
-# rows_to_filter = seq(from = date_to_predict - days(1), to = date_to_predict - hours(1), by = "hour")
-# df <- df[df$time %in% rows_to_filter, ]
-
 df_price <- read_excel_allsheets("data/electricity_price.xlsx")$Sheet1
 colnames(df_price) <- c("daytime", "price")
 df_price$daytime <- c(0:23)
@@ -91,125 +87,112 @@ features <- list("0"=list(levels = c(as.character(seq(from = min_hp_tset, to = m
                  )
 
 # for example:
-time_to_predict <- as.POSIXct(x = "2019-01-31 23:00:00 UTC", tz = "UTC")
+time_to_predict <- as.POSIXct(x = "2019-01-15 23:00:00 UTC", tz = "UTC")
 # there is a problem with the base spline of tfloor_l0 when doing the predict of mod_q
 # Ill try looking the "i" values (watching different "times_to_predict") for which the error is occurring in order to try to infer where the problem is
-time_to_predict <- as.POSIXct(x = "2019-01-10 23:00:00 UTC", tz = "UTC")
-time_to_predict <- as.POSIXct(x = "2019-01-15 23:00:00 UTC", tz = "UTC")
+# time_to_predict <- as.POSIXct(x = "2019-01-22 23:00:00 UTC", tz = "UTC")
 
 # df_original <- df
 # df <- df_original
 
-
-
 ############################################################## start (DEBUGGING THE PROBLEM)
 
-nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features)))
-class_per_feature = mapply(function(i){i[['class']]},features)
-nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features)
-levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
-names_per_feature = names(features)
-
-X = sample(c(0,1),nBits,replace=T)
-params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
-names(params_hp_tset_24h) <- names_per_feature
-
-rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
-hp_tset_24h = numeric(nrow(df))
-hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
-
-# prediction_scenario <- function(...
-df <- tune_model_input(df,params)
-df <- df[rows_to_filter,]
-hp_tset_24h <- hp_tset_24h[rows_to_filter]
-
-df$date <- as.Date(df$time, tz="Europe/Berlin")
-ts_prediction <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
-
-calculate_df <- function(ts_prediction){ 
-  
-  # Filter the initial dataset 
-  df_ <- df[df$time>=ts_prediction & df$time<=(ts_prediction+hours(23)),]
-  df_$ts_prediction <- ts_prediction
-  
-  # Assign the control variables of the scenario
-  df_$hp_tset_l0 <- as.numeric(hp_tset_24h[df$time %in% df_$time])
-  df_$hp_status_l0 <- ifelse(is.na(hp_tset_24h[df$time %in% df_$time]),0,1)
-  
-  # Iterate for each timestep (1 hour)
-  for (i in 1:nrow(df_)){
-    print(i)
-    #i=12
-    # Calculate the floor temperature and indoor temperature under free floating conditions
-    df_$hp_cons_l0[i] <- 0
-    tfloor_ff <- df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
-    ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,])
-    # If the heat pump should be on, estimate the heat pump consumption and 
-    # re-estimate the floor and indoor temperatures considering the heat input.
-    if(df_$hp_status_l0[i]==1 && !is.na(tfloor_ff) && !is.na(ti_ff)){
-      df_$tfloor_l0[i] <- df_$hp_tset_l0[i]
-      df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
-      if(df_$hp_cons_l0[i]>0){
-        df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
-        df_$ti_l0[i] <- predict(mod_ti, df_[i,])
-        # If heat pump consumption estimation is negative, then consider the indoor and 
-        # floor temperatures estimated with free floating conditions
-      } else {
-        df_$hp_cons_l0[i] <- 0
-        df_$hp_status_l0[i] <- 0
-        df_$hp_tset_l0[i] <- NA
-        df_$tfloor_l0[i] <- tfloor_ff
-        df_$ti_l0[i] <- ti_ff
-      }
-    }
-    
-    # Reassign the ti calculated values to next timesteps lagged values
-    for (l in 1:max(params[c("mod_tfloor_ar","mod_hp_cons_lags_tfloor","mod_ti_lags_dti")])){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tfloor_l",l)] <- df_$tfloor_l0[i]}}, error=function(e){next})
-    }
-    for (l in 1:max(params[c("mod_hp_cons_ar","mod_tfloor_lags_hp_cons","mod_tfloor_ar","mod_ti_lags_dti")])){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
-    }
-    for (l in 1:max(params[c("mod_ti_ar","mod_ti_lags_infiltrations")])){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}}, error=function(e){next})
-    }
-    df$dti[i] <- df$ti_l0[i] - df$tfloor_l0[i]
-    for (l in 1:max(c(params[c("mod_ti_lags_dti","mod_tfloor_lags_dti")]))){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dti_l",l)] <- df_$dti_l0[i]}}, error=function(e){next})
-    }
-    df$dte_l0[i] <- (rowMeans(data.frame(df$ti_l1[i],df$ti_l0[i])) - rowMeans(data.frame(df$te_l1[i],df$te_l0[i])))
-    df$infiltrations_l0[i] <- ifelse(df$dte_l0[i]>0,df$dte_l0[i],0) * df$windSpeed[i]
-    for (l in 1:max(c(params[c("mod_ti_lags_infiltrations")]))){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("infiltrations_l",l)] <- df_$infiltrations_l0[i]}}, error=function(e){next})
-    }
-    df$dtf_l0[i] <- df$tfloor_l0[i] - df$te_l0[i]
-    for (l in 1:max(c(params[c("mod_hp_cons_lags_tfloor")]))){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dtf_l",l)] <- df_$dtf_l0[i]}}, error=function(e){next})
-    }
-  }
-  
-  return(df_)
-}
-  
-df_test <- calculate_df(ts_prediction)
+# nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features)))
+# class_per_feature = mapply(function(i){i[['class']]},features)
+# nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features)
+# levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
+# names_per_feature = names(features)
+# 
+# # X = sample(c(0,1),nBits,replace=T)
+# # params_hp_tset_24h <- c("30", "30", "30", "30", "30", "30", "30", "30", "30", "30", "30", "30",
+# #                           "30", "30", "30", "30", "30", "30", "30", "30", "30", "30", "30", "30")
+# params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
+# names(params_hp_tset_24h) <- names_per_feature
+# 
+# rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
+# hp_tset_24h = numeric(nrow(df))
+# hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
+# 
+# 
+# # prediction_scenario <- function(...
+# df <- tune_model_input(df,params)
+# df <- df[rows_to_filter,]
+# 
+# hp_tset_24h <- hp_tset_24h[rows_to_filter]
+# 
+# df$date <- as.Date(df$time, tz="Europe/Berlin")
+# ts_prediction <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
+# 
+# calculate_df <- function(ts_prediction){
+# 
+#   # Filter the initial dataset
+#   df_ <- df[df$time>=ts_prediction & df$time<=(ts_prediction+hours(23)),]
+#   df_$ts_prediction <- ts_prediction
+# 
+#   # Assign the control variables of the scenario
+#   df_$hp_tset_l0 <- as.numeric(hp_tset_24h[df$time %in% df_$time])
+#   df_$hp_status_l0 <- ifelse(is.na(hp_tset_24h[df$time %in% df_$time]),0,1)
+# 
+#   # Iterate for each timestep (1 hour)
+#   for (i in 1:nrow(df_)){
+#     print(i)
+#     #i=12
+#     # Calculate the floor temperature and indoor temperature under free floating conditions
+#     df_$hp_cons_l0[i] <- 0
+#     tfloor_ff <- df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
+#     ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,])
+#     # If the heat pump should be on, estimate the heat pump consumption and
+#     # re-estimate the floor and indoor temperatures considering the heat input.
+#     if(df_$hp_status_l0[i]==1 && !is.na(tfloor_ff) && !is.na(ti_ff)){
+#       df_$tfloor_l0[i] <- df_$hp_tset_l0[i]
+#       df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
+#       if(df_$hp_cons_l0[i]>0){
+#         df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
+#         df_$ti_l0[i] <- predict(mod_ti, df_[i,])
+#         # If heat pump consumption estimation is negative, then consider the indoor and
+#         # floor temperatures estimated with free floating conditions
+#       } else {
+#         df_$hp_cons_l0[i] <- 0
+#         df_$hp_status_l0[i] <- 0
+#         df_$hp_tset_l0[i] <- NA
+#         df_$tfloor_l0[i] <- tfloor_ff
+#         df_$ti_l0[i] <- ti_ff
+#       }
+#     }
+# 
+#     # Reassign the ti calculated values to next timesteps lagged values
+#     for (l in 1:max(params[c("mod_tfloor_ar","mod_hp_cons_lags_tfloor","mod_ti_lags_dti")])){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tfloor_l",l)] <- df_$tfloor_l0[i]}}, error=function(e){next})
+#     }
+#     for (l in 1:max(params[c("mod_hp_cons_ar","mod_tfloor_lags_hp_cons","mod_tfloor_ar","mod_ti_lags_dti")])){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
+#     }
+#     for (l in 1:max(params[c("mod_ti_ar","mod_ti_lags_infiltrations")])){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}}, error=function(e){next})
+#     }
+#     df$dti[i] <- df$ti_l0[i] - df$tfloor_l0[i]
+#     for (l in 1:max(c(params[c("mod_ti_lags_dti","mod_tfloor_lags_dti")]))){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dti_l",l)] <- df_$dti_l0[i]}}, error=function(e){next})
+#     }
+#     df$dte_l0[i] <- (rowMeans(data.frame(df$ti_l1[i],df$ti_l0[i])) - rowMeans(data.frame(df$te_l1[i],df$te_l0[i])))
+#     df$infiltrations_l0[i] <- ifelse(df$dte_l0[i]>0,df$dte_l0[i],0) * df$windSpeed[i]
+#     for (l in 1:max(c(params[c("mod_ti_lags_infiltrations")]))){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("infiltrations_l",l)] <- df_$infiltrations_l0[i]}}, error=function(e){next})
+#     }
+#     df$dtf_l0[i] <- df$tfloor_l0[i] - df$te_l0[i]
+#     for (l in 1:max(c(params[c("mod_hp_cons_lags_tfloor")]))){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dtf_l",l)] <- df_$dtf_l0[i]}}, error=function(e){next})
+#     }
+#   }
+# 
+#   return(df_)
+# }
+# 
+# df_test <- calculate_df(ts_prediction)
+# score <- sum(df_price$price * df_test$hp_cons_l0)
 
 ############################################################## end (DEBUGGING THE PROBLEM)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -1291,7 +1291,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NU
   df <- lapply(ts_prediction,function(ts_){
     
     # Filter the initial dataset 
-    #ts_=ts_prediction[1]
+    # ts_=ts_prediction[1]
     df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(23)),]
     df_$ts_prediction <- ts_
     
@@ -1584,8 +1584,12 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
                           df, mod_q, mod_ti, mod_tfloor, df_price, time_to_predict, params){
   
   #X=sample(c(0,1),nBits,replace=T)
+  
   params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
+  params_hp_tset_24h <- as.numeric(params_hp_tset_24h)
   names(params_hp_tset_24h) <- names_per_feature
+  
+  
   
   rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
   hp_tset_24h = numeric(nrow(df))
