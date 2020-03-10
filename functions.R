@@ -1312,7 +1312,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tfloor, df, rows_to_filter=NU
         df_$tfloor_l0[i] <- df_$hp_tset_l0[i]
         df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
         if(df_$hp_cons_l0[i]>0){
-          df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
+          # df_$tfloor_l0[i] <- predict(mod_tfloor, df_[i,])
           df_$ti_l0[i] <- predict(mod_ti, df_[i,])
         # If heat pump consumption estimation is negative, then consider the indoor and 
         # floor temperatures estimated with free floating conditions
@@ -1392,17 +1392,19 @@ decodeValueFromBin <- function(binary_representation, class_per_feature, nclasse
 }
 
 decodeBinFromValue <- function(values, class_per_feature, nclasses_per_feature,
-                               min_per_feature, max_per_feature){
+                               levels_per_feature = NULL, min_per_feature = NULL, max_per_feature = NULL){
   # values=c(0,400)
   # class_per_feature=c("int","int")
   # nclasses_per_feature=c(4,5)
   # min_per_feature=c(0,0)
   # max_per_feature=c(400,500)
-  # 
+  #
+  
   values <- mapply(
     function(x){
       
       switch(class_per_feature[x],
+             "discrete"= which(levels_per_feature[[x]] %in% values[x])-1,
              "int"= which(seq(min_per_feature[x],max_per_feature[x],
                               by=(max_per_feature[x]-min_per_feature[x])/(nclasses_per_feature[x])) %in% values[x])-1,
              "float"= which(seq(min_per_feature[x],max_per_feature[x],
@@ -1581,15 +1583,13 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
 }
 
 optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tfloor, df_price, time_to_predict, params){
+                          df, mod_q, mod_ti, mod_tfloor, ti_min, ti_max, df_price, time_to_predict, params){
   
   #X=sample(c(0,1),nBits,replace=T)
   
   params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
   params_hp_tset_24h <- as.numeric(params_hp_tset_24h)
-  names(params_hp_tset_24h) <- names_per_feature
-  
-  
+  # names(params_hp_tset_24h) <- names_per_feature
   
   rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
   hp_tset_24h = numeric(nrow(df))
@@ -1607,21 +1607,23 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     ts_prediction = NULL
   )
   
-  # # constrains:
-  # if (condition) {
-  #   # max and min range (comfort bands) for ti defined based on the time of the day
-  #   temp_min = c(rep(x = 20, times = 12), rep(x = 17, times = 12))
-  #   temp_max = c(rep(x = 28, times = 12), rep(x = 25, times = 12))
-  #   # should repeat this for the tfloor?
-  # }
+  # I should later include a "v_parameter" to allow the temp_min move an epsilon lower 
+  # and temp_max an epsilon higher:
+  # ti_min = ti_min - v
+  # ti_max = ti_max + v
+  # And v should be included in the parameters to be optimized
   
-  # cost function:
-  # sum over 24 hours
-  # check units (in price is euro/MWh and consumption dont know if is MWh or kWh)??
+  if (any(predv$ti_l0 < ti_min | predv$ti_l0 > ti_max)) {
+    # should change this
+    return(-50000000000000)
+  }
+  
+  # Cost function: sum over 24 hours
+  # check units (in price is euro/MWh and consumption Wh)??
   score <- sum(df_price$price*predv$hp_cons_l0)
   
   if (is.finite(score)){
-    return(score)
+    return(-score)
   } else {return(-10000000000000)}
 }
 
