@@ -34,7 +34,7 @@ df_house <- data.frame("time"=house$DATE,
                  "hp_status"=house$`hp_status_command (u1)`,
                  "hp_tset"=house$`hp_supply_temp_command(u2)`,
                  "hp_cop"=house$COP,
-                 "tfloor"=house$HeatPump_actual_Tsup,
+                 "tsupply"=house$HeatPump_actual_Tsup,
                  "ti"=house$`Building's representative Temperature of the current time step(volume-averaged)`,
                  "hg"=rowSums(house[,grepl("_sum__hin_",colnames(house))]),
                  #"air_h"=rowSums(house[,grepl("_SUA_IHS_elP",colnames(house))]),
@@ -82,12 +82,12 @@ features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "alpha_GHI"=list(min=0,max=0,n=0,class="float"),
                  "alpha_ws"=list(min=0,max=0.9,n=15,class="float"),
                  "mod_hp_cons_ar"=list(min=1,max=6,n=5,class="int"),
-                 "mod_hp_cons_lags_tfloor"=list(min=1,max=1,n=0,class="int"),
+                 "mod_hp_cons_lags_tsupply"=list(min=1,max=1,n=0,class="int"),
                  "mod_hp_cons_lags_te"=list(min=0,max=0,n=0,class="int"),
                  "mod_hp_cons_lags_humidity"=list(min=0,max=0,n=0,class="int"),
-                 "mod_tfloor_ar"=list(min=1,max=5,n=4,class="int"),
-                 "mod_tfloor_lags_hp_cons"=list(min=0,max=3,n=3,class="int"),
-                 "mod_tfloor_lags_dti"=list(min=0,max=0,n=0,class="int"),
+                 "mod_tsupply_ar"=list(min=1,max=5,n=4,class="int"),
+                 "mod_tsupply_lags_hp_cons"=list(min=0,max=3,n=3,class="int"),
+                 "mod_tsupply_lags_dti"=list(min=0,max=0,n=0,class="int"),
                  "mod_ti_ar"=list(min=1,max=5,n=4,class="int"),
                  "mod_ti_lags_te"=list(min=0,max=3,n=3,class="int"),
                  "mod_ti_lags_dti"=list(min=0,max=6,n=6,class="int"),
@@ -136,15 +136,15 @@ names(params) <- names(features)
 # Calculate the models with consumption as output (result_q) and indoor temperature as output (result_ti).
 result_q <- calculate_model_q(params, df, train_dates, output="model")
 result_ti <- calculate_model_ti(params, df, train_dates, output="model")
-result_tfloor <- calculate_model_tfloor(params, df, train_dates, output="model")
+result_tsupply <- calculate_model_tsupply(params, df, train_dates, output="model")
 mod_q <- result_q$mod
 mod_ti <- result_ti$mod
-mod_tfloor <- result_tfloor$mod
+mod_tsupply <- result_tsupply$mod
 df_mod <- result_ti$df
 cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values)
 cpgram(mod_ti$model$ti_l0-mod_ti$fitted.values)
-cpgram(mod_tfloor$model$tfloor_l0-mod_tfloor$fitted.values)
-# summary(mod_tfloor)
+cpgram(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values)
+# summary(mod_tsupply)
 # summary(mod_q)
 # summary(mod_ti)
 
@@ -152,7 +152,7 @@ cpgram(mod_tfloor$model$tfloor_l0-mod_tfloor$fitted.values)
 predv <- prediction_scenario(
   mod_q = mod_q, 
   mod_ti = mod_ti,
-  mod_tfloor = mod_tfloor,
+  mod_tsupply = mod_tsupply,
   df = df,
   rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
   hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
@@ -162,8 +162,8 @@ predv <- prediction_scenario(
 
 grid.arrange(
   ggplot(predv)+
-    geom_line(aes(time,tfloor))+
-    geom_line(aes(time,tfloor_l0),col=2)+
+    geom_line(aes(time,tsupply))+
+    geom_line(aes(time,tsupply_l0),col=2)+
     geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
     ylab("Supply temperature [ºC]")+
     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
@@ -230,7 +230,7 @@ features <- list("0"=list(levels = c(as.character(seq(from = min_hp_tset, to = m
 )
 
 # Initialize the time to predict, for example: (took a date inside val_dates: (2019-01-23 : 2019-02-01))
-time_to_predict <- as.POSIXct(x = "2019-01-25 23:00:00 UTC", tz = "UTC")
+time_to_predict <- as.POSIXct(x = "2019-01-29 23:00:00 UTC", tz = "UTC")
 
 # Constrains:
 # max and min range (comfort bands) for ti defined based on the time of the day
@@ -250,14 +250,14 @@ params_hp_tset_24h = rep(x = min_hp_tset, times = 24)
 # params_hp_tset_24h = as.character(params_hp_tset_24h)
 # params_hp_tset_24h[is.na(params_hp_tset_24h)] <- "NA"
 
-params_hp_tset_24h = rep(x = "NA", times = 12)
-rep(x = min_hp_tset, times = 12)
-
-params_hp_tset_24h = character(24)
-mean_hour_price = floor(mean(as.numeric(c(floor(mean(which(df_price$price == max(df_price$price)))), floor(mean(which(df_price$price == min(df_price$price)))) ))))
-
-params_hp_tset_24h[mean_hour_price:24] = "NA"
-params_hp_tset_24h[1:mean_hour_price-1] = floor(mean(c(min_hp_tset, max_hp_tset)))
+# params_hp_tset_24h = rep(x = "NA", times = 12)
+# rep(x = min_hp_tset, times = 12)
+# 
+# params_hp_tset_24h = character(24)
+# mean_hour_price = floor(mean(as.numeric(c(floor(mean(which(df_price$price == max(df_price$price)))), floor(mean(which(df_price$price == min(df_price$price)))) ))))
+# 
+# params_hp_tset_24h[mean_hour_price:24] = "NA"
+# params_hp_tset_24h[1:mean_hour_price-1] = floor(mean(c(min_hp_tset, max_hp_tset)))
 
 suggestions = decodeBinFromValue(values = params_hp_tset_24h, class_per_feature = mapply(function(i){i[['class']]},features), 
                                  nclasses_per_feature =  mapply(function(i){length(i[["levels"]])},features), 
@@ -276,7 +276,7 @@ optimization_results_MPC <- suppressMessages(
     params = params,
     mod_q = mod_q,
     mod_ti = mod_ti,
-    mod_tfloor = mod_tfloor,
+    mod_tsupply = mod_tsupply,
     ti_min = ti_min,
     ti_max = ti_max,
     df_price = df_price,
@@ -299,8 +299,7 @@ params_hp_tset_24h_opt <- as.numeric(decodeValueFromBin(binary_representation = 
                                                         levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
 ))
 
-# First I will try to compare the results of the optimizer with the validation results (in order to inspire 
-# the improvement)
+# Comparison of the curves of the optimizer with the validation results 
 
 hp_tset_24h <- numeric(length = nrow(df))
 rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
@@ -309,7 +308,7 @@ hp_tset_24h[rows_to_filter] = params_hp_tset_24h_opt
 predv <- prediction_scenario(
   mod_q = mod_q, 
   mod_ti = mod_ti,
-  mod_tfloor = mod_tfloor,
+  mod_tsupply = mod_tsupply,
   df = df,
   rows_to_filter = rows_to_filter,
   hp_tset_24h = hp_tset_24h,
@@ -319,8 +318,8 @@ predv <- prediction_scenario(
 
 grid.arrange(
   ggplot(predv)+
-    geom_line(aes(time,tfloor))+
-    geom_line(aes(time,tfloor_l0),col=2)+
+    geom_line(aes(time,tsupply))+
+    geom_line(aes(time,tsupply_l0),col=2)+
     geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
     ylab("Supply temperature [ºC]")+
     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
