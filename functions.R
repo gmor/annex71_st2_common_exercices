@@ -1608,8 +1608,10 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
   )
   
   # Simetrical penalty is proposed (same penalty if the temperature bound in violated over or under)
-  delta <- abs(pmin((predv$ti_l0 - ti_min), (ti_max - predv$ti_l0)))
-
+  delta <- pmin((predv$ti_l0 - ti_min), (ti_max - predv$ti_l0))
+  delta[delta>0] <- 0
+  delta <- abs(delta)
+  
   if (any(delta!=0)) {
     # Exponential parameter lambda
     lambda <- 2
@@ -1633,7 +1635,10 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     delta_penalty <- penalty_function(delta, delta_limit = 2, lamda)
     delta_penalty[delta_penalty<0] <- 500000
     
-    penalty <- sum(delta_penalty)
+    # 3) Linear growth of penalty
+    # delta_penalty <- 
+    # 
+    # penalty <- sum(delta_penalty)
   }
   
   # Cost function: sum over 24 hours
