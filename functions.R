@@ -139,6 +139,84 @@ tune_model_input <- function(df,params){
   return(df)
 }
 
+tune_model_input_fdd <- function(df,params){
+  
+  # Low pass filtering of the indoor and outdoor temperatures
+  df$te_raw <- df$te
+  df$te <- lp_vector(df$te,params["alpha_te"])
+  df$GHI <- lp_vector(df$GHI,params["alpha_GHI"])
+  df$BHI <- lp_vector(df$BHI,params["alpha_BHI"])
+  df$windSpeed <- lp_vector(df$windSpeed,params["alpha_ws"])
+  
+  # Lag the input columns and weather tranformations
+  # HP consumption
+  for (l in 0:max(params[c("mod_tfloor_lags_hp_cons","mod_hp_cons_ar","mod_tfloor_ar")])){
+    df[,paste0("hp_cons_l",l)] <- dplyr::lag(df[,"hp_cons"],l)
+    df[,paste0("hp_status_l",l)] <- dplyr::lag(df[,"hp_status"],l)
+  }
+  for (l in 0:max(params[c("mod_hp_cons_lags_tfloor","mod_ti_lags_dti","mod_tfloor_ar")])){
+    df[,paste0("tfloor_l",l)] <- dplyr::lag(df[,"tfloor"],l)
+  }
+  # Weather and indoor comfort
+  for (l in 0:max(c(1,params[c("mod_hp_cons_ar","mod_hp_cons_lags_te","mod_hp_cons_lags_humidity","mod_ti_lags_te","mod_hp_cons_lags_tfloor",
+                               "mod_ti_lags_infiltrations","mod_tfloor_lags_hp_cons")]))){
+    df[,paste0("te_l",l)] <- dplyr::lag(df[,"te"],l)
+    df[,paste0("te_raw_l",l)] <- dplyr::lag(df[,"te_raw"],l)
+  }
+  df$dtf <- df$tfloor - df$te
+  for (l in 0:max(c(1,params[c("mod_hp_cons_lags_tfloor")]))){
+    df[,paste0("dtf_l",l)] <- dplyr::lag(df[,"dtf"],l)
+  }
+  df$dti <- df$tfloor - df$ti
+  for (l in 0:max(c(1,params[c("mod_ti_ar","mod_ti_lags_dti","mod_ti_lags_infiltrations")]))){
+    df[,paste0("ti_l",l)] <- dplyr::lag(df[,"ti"],l)
+  }
+  for (l in 0:max(c(params[c("mod_ti_lags_dti","mod_tfloor_lags_dti")]))){
+    df[,paste0("dti_l",l)] <- dplyr::lag(df[,"dti"],l)
+  }
+  for (l in 0:params["mod_ti_lags_hg"]){
+    df[,paste0("hg_l",l)] <- dplyr::lag(df[,"hg"],l)
+  }
+  for (l in 0:params["mod_ti_lags_GHI"]){
+    df[,paste0("GHI_l",l)] <- dplyr::lag(df[,"GHI"],l)
+  }
+  for (l in 0:params["mod_ti_lags_BHI"]){
+    df[,paste0("BHI_l",l)] <- dplyr::lag(df[,"BHI"],l)
+  }
+  for (l in 0:max(params[c("mod_hp_cons_ar","mod_ti_lags_humidity","mod_hp_cons_lags_te",
+                           "mod_hp_cons_lags_humidity","mod_tfloor_lags_hp_cons")])){
+    df[,paste0("humidity_l",l)] <- dplyr::lag(df[,"humidity"],l)
+  }
+  df$dte <- (rowMeans(data.frame(df$ti_l1,df$ti_l0)) - rowMeans(data.frame(df$te_l1,df$te_l0)))
+  df$infiltrations <- ifelse(df$dte>0,df$dte,0) * df$windSpeed
+  # for (l in 0:params["lags_dte"]){
+  #   df[,paste0("dte_l",l)] <- dplyr::lag(df[,"dte"],l)
+  # }
+  for (l in 0:params["mod_ti_lags_infiltrations"]){
+    df[,paste0("infiltrations_l",l)] <- dplyr::lag(df[,"infiltrations"],l)
+  }
+  
+  # Calculate the sunazimuth and windbearing fourier series
+  if(params["sunAzimuth_nharmonics"]>0){
+    df <- add_fourier_series_sunazimuth(df, sunAzimuth_nharmonics = params["sunAzimuth_nharmonics"], min_solarElevation=-1)
+  }
+  for(m in colnames(df)[grepl("^sunAzimuth_fs_",colnames(df))]){
+    for (l in 0:max(params[c("mod_ti_lags_GHI","mod_ti_lags_BHI")])){
+      df[,gsub("fs",paste0("fs_l",l),m)] <- dplyr::lag(df[,m],l)
+    }
+  }
+  if(params["windBearing_nharmonics"]>0){
+    df <- add_fourier_series_windbearing(df, windBearing_nharmonics= params["windBearing_nharmonics"])
+  }
+  for(m in colnames(df)[grepl("^windBearing_fs_",colnames(df))]){
+    for (l in 0:params["mod_ti_lags_infiltrations"]){
+      df[,gsub("fs",paste0("fs_l",l),m)] <- dplyr::lag(df[,m],l)
+    }
+  }
+  
+  return(df)
+}
+
 
 fs <- function(X, nharmonics, pair_function=T) {
   do.call("c", lapply(1:nharmonics, function(i) {
@@ -614,7 +692,9 @@ printlm <- function(mod, df, value_column, value_repr, ncol, irf_objects=NULL){
 
 calculate_model_ti <- function(params, df, train_dates, output="aic"){
   
-  df <- tune_model_input(df, params)
+  
+  df <- tune_model_input(df,params)
+  
   df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
   df <- df[complete.cases(df),]
   
@@ -665,7 +745,10 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
 
 calculate_model_q <- function(params, df, train_dates, output="aic"){
   
+
   df <- tune_model_input(df,params)
+  
+  
   df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
   df <- df[complete.cases(df),]
   
@@ -702,7 +785,9 @@ calculate_model_q <- function(params, df, train_dates, output="aic"){
 
 calculate_model_tfloor <- function(params, df, train_dates, output="aic"){
   
+ 
   df <- tune_model_input(df,params)
+  
   df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
   df <- df[complete.cases(df),]
   
@@ -1545,11 +1630,11 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
     tfloor_diff <- rmserr(predv$tfloor[is.finite(predv$tfloor)],predv$tfloor_l0[is.finite(predv$tfloor)])$rmse
     
     # # Autocorrelations
-    a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = T)
+    a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = F)
     inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = T)
+    a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = F)
     inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_tfloor$model$tfloor_l0-mod_tfloor$fitted.values,plot = T)
+    a <- acf(mod_tfloor$model$tfloor_l0-mod_tfloor$fitted.values,plot = F)
     inc_tfloor <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
     #
     # # Impulse responses

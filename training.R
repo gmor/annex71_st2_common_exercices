@@ -28,6 +28,8 @@ library(readxl)
 #library(jsonlite)  
 #library(mongolite)
 
+#MPC data import
+
 house <- read_excel_allsheets("data/Twin_house_O5_exp1_60minR1.xlsx")$Sheet1
 weather <- read_excel_allsheets("data/Twin_house_weather_exp1_60min_compensated.xlsx")$`Weather_Station_IBP_2018-11-01_`
 weather[,c("sunAz","sunEl")] <- do.call(cbind,oce::sunAngle(weather$DATE,latitude = 47.874,longitude = 11.728))[,c("azimuth","altitude")]
@@ -98,6 +100,7 @@ features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "sunAzimuth_nharmonics"=list(min=2,max=5,n=3,class="int"),
                  "windBearing_nharmonics"=list(min=2,max=5,n=3,class="int")
                  )
+
 optimization_results <- suppressMessages(
   ga(
     type = "binary",
