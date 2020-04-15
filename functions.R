@@ -1709,7 +1709,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     # 
     # exp_delta <- exp(lambda*delta)
     # penalty <- sum(exp_delta[exp_delta>1])
-    #
+    # 
     # 
     # if (any(delta > delta_limit)){
     #   score = 5000000
@@ -1723,7 +1723,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     # 3) Linear growth of penalty
     # delta_penalty <- 
     # 
-    # penalty <- sum(delta_penalty)
+    penalty <- sum(delta_penalty)
   }
   
   # Cost function: sum over 24 hours
