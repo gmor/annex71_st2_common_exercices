@@ -279,7 +279,7 @@ optimization_results_MPC <- suppressMessages(
     mod_tsupply = mod_tsupply,
     ti_min = ti_min,
     ti_max = ti_max,
-    df_price = df_price,
+    df_price = df_price,  
     selection = gabin_tourSelection,
     df = df,
     suggestions = suggestions,
@@ -316,7 +316,18 @@ predv <- prediction_scenario(
   ts_prediction = NULL
 )
 
-grid.arrange(
+# Comparison of results:
+optimized_price = sum(df_price$price * predv$hp_cons_l0)
+predv$hourly_optimized_price = df_price$price * predv$hp_cons_l0
+old_price = sum(df_price$price * df[rows_to_filter, "hp_cons"])
+predv$hourly_old_price = df_price$price * df[rows_to_filter, "hp_cons"]
+
+diff = old_price - optimized_price
+# Savings respect to the old_price?
+saving = diff/old_price
+
+
+p <- grid.arrange(
   ggplot(predv)+
     geom_line(aes(time,tsupply))+
     geom_line(aes(time,tsupply_l0),col=2)+
@@ -339,12 +350,159 @@ grid.arrange(
     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
     scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
     theme_bw(), 
-  ncol=1
+  ncol=1,
+  top = paste0("Savings = ",round(saving, digits = 2)*100,"%")
 )
 
-# Comparison of results:
-optimized_price = sum(df_price$price * predv$hp_cons_l0) 
-old_price = sum(df_price$price * df[rows_to_filter, "hp_cons"])
+ggsave(plot = p, filename = paste0("MPC_savings_",unique(date(predv$ts_prediction)),".pdf"))
 
-diff = old_price - optimized_price
+####################################################### testing MPC in several cases ######################
+
+# Import the "price" dataset
+df_price <- read_excel_allsheets("data/electricity_price.xlsx")$Sheet1
+colnames(df_price) <- c("daytime", "price")
+df_price$daytime <- c(0:23)
+
+# Initialize range for tset  
+min_hp_tset <- min(df$hp_tset) 
+max_hp_tset <- max(df$hp_tset) -3
+
+# Initialize the limits in which the vector params_hp_tset_24h will live
+features <- list("0"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "1"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "2"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "3"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "4"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "5"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "6"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "7"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "8"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "9"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "10"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "11"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "12"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "13"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "14"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "15"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "16"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "17"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "18"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "19"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "20"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "21"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "22"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete"),
+                 "23"=list(levels = c(as.character(seq(from = min_hp_tset, to = max_hp_tset, by = 1)), "NA"), class = "discrete")
+)
+
+ti_min = c(rep(x = 18, times = 7), rep(x = 20, times = 24-7)) 
+ti_max = c(rep(x = 22, times = 7), rep(x = 24, times = 24-7)) 
+
+# Using min temperature as starting point
+params_hp_tset_24h = rep(x = min_hp_tset, times = 24)
+
+
+for (date in as.character(val_dates)) {
+ 
+  # Initialize the time to predict, for example: (took a date inside val_dates: (2019-01-23 : 2019-02-01))
+  time_to_predict <- as.POSIXct(x = paste0(date," 23:00:00 UTC"), tz = "UTC")
+
+  suggestions = decodeBinFromValue(values = params_hp_tset_24h, class_per_feature = mapply(function(i){i[['class']]},features), 
+                                   nclasses_per_feature =  mapply(function(i){length(i[["levels"]])},features), 
+                                   levels_per_feature = lapply(function(i){i[["levels"]]}, X = features))
+
+  optimization_results_MPC <- suppressMessages(
+    ga(
+      type = "binary",
+      fitness = optimizer_MPC,
+      nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features))),
+      class_per_feature = mapply(function(i){i[['class']]},features),
+      nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features),
+      levels_per_feature = lapply(function(i){i[["levels"]]}, X = features), 
+      names_per_feature = names(features),
+      time_to_predict = time_to_predict,
+      params = params,
+      mod_q = mod_q,
+      mod_ti = mod_ti,
+      mod_tsupply = mod_tsupply,
+      ti_min = ti_min,
+      ti_max = ti_max,
+      df_price = df_price,  
+      selection = gabin_tourSelection,
+      df = df,
+      suggestions = suggestions,
+      keepBest = TRUE,
+      popSize = 64,
+      maxiter = 20,
+      monitor = gaMonitor2,
+      parallel = 16,
+      elitism = 0.08,
+      pmutation = 0.05
+    )
+  )
+  
+  params_hp_tset_24h_opt <- as.numeric(decodeValueFromBin(binary_representation = optimization_results_MPC@solution[1,],
+                                                          class_per_feature = mapply(function(i){i[['class']]},features),
+                                                          nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features),
+                                                          levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
+  ))
+
+  # Comparison of the curves of the optimizer with the validation results 
+  
+  hp_tset_24h <- numeric(length = nrow(df))
+  rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
+  hp_tset_24h[rows_to_filter] = params_hp_tset_24h_opt
+  
+  predv <- prediction_scenario(
+    mod_q = mod_q, 
+    mod_ti = mod_ti,
+    mod_tsupply = mod_tsupply,
+    df = df,
+    rows_to_filter = rows_to_filter,
+    hp_tset_24h = hp_tset_24h,
+    params = params,
+    ts_prediction = NULL
+  )
+  
+  # Comparison of results:
+  optimized_price = sum(df_price$price * predv$hp_cons_l0)
+  predv$hourly_optimized_price = df_price$price * predv$hp_cons_l0
+  old_price = sum(df_price$price * df[rows_to_filter, "hp_cons"])
+  predv$hourly_old_price = df_price$price * df[rows_to_filter, "hp_cons"]
+  
+  diff = old_price - optimized_price
+  # Savings respect to the old_price?
+  saving = diff/old_price
+
+  p <- grid.arrange(
+    ggplot(predv)+
+      geom_line(aes(time,tsupply))+
+      geom_line(aes(time,tsupply_l0),col=2)+
+      geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
+      ylab("Supply temperature [ºC]")+
+      facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+      scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+      theme_bw(),
+    ggplot(predv)+
+      geom_line(aes(time,ti))+
+      geom_line(aes(time,ti_l0),col=2)+
+      ylab("Indoor temperature [ºC]")+
+      facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+      scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+      theme_bw(),
+    ggplot(predv)+
+      geom_line(aes(time,hp_cons))+
+      geom_line(aes(time,hp_cons_l0),col=2)+
+      ylab("HP electricity [Wh]")+
+      facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+      scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+      theme_bw(), 
+    ncol=1,
+    top = paste0("Savings = ",round(saving, digits = 2)*100,"%")
+  )
+  
+  ggsave(plot = p, filename = paste0("MPC_savings_",date,".pdf"))
+  
+}
+
+
 

@@ -1717,7 +1717,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     # }
 
     # 2) Exponential growth of penalty with homographic function to include the asymptote in the delta_limit
-    delta_penalty <- penalty_function(delta, delta_limit = 2, lamda)
+    delta_penalty <- penalty_function(delta, delta_limit = 1.2, lamda)
     delta_penalty[delta_penalty<0] <- 500000
     
     # 3) Linear growth of penalty
