@@ -35,33 +35,33 @@ weather <- read_excel_allsheets("data/Twin_house_weather_exp1_60min_compensated.
 weather[,c("sunAz","sunEl")] <- do.call(cbind,oce::sunAngle(weather$DATE,latitude = 47.874,longitude = 11.728))[,c("azimuth","altitude")]
 
 df_house <- data.frame("time"=house$DATE,
-                 "hp_cons"=house$hp_el_cons,
-                 "hp_status"=house$`hp_status_command (u1)`,
-                 "hp_tset"=house$`hp_supply_temp_command(u2)`,
-                 "hp_cop"=house$COP,
-                 "tfloor"=house$HeatPump_actual_Tsup,
-                 "ti"=house$`Building's representative Temperature of the current time step(volume-averaged)`,
-                 "hg"=rowSums(house[,grepl("_sum__hin_",colnames(house))]),
-                 #"air_h"=rowSums(house[,grepl("_SUA_IHS_elP",colnames(house))]),
-                 #"air_s"=rowSums(house[,grepl("_SUA_fan_elP",colnames(house))]),
-                 #"air_e"=rowSums(house[,grepl("_EHA_fan_elP",colnames(house))]),
-                 "vent"=rowSums(
-                   data.frame((house$o5_Vent_child1_SUA_AT*house$o5_Vent_child1_SUA_VFR-house$o5_child1_AT*house$o5_Vent_child1_EHA_VFR),
-                              house$o5_Vent_child2_SUA_AT*house$o5_Vent_child2_SUA_VFR-house$o5_child2_AT*house$o5_Vent_child2_EHA_VFR,
-                              house$o5_Vent_living_SUA_AT*house$o5_Vent_living_SUA_VFR-(house$o5_living_AT+house$o5_bath_AT)*house$o5_Vent_bath_EHA_VFR
-                    ))
-                 )
+                       "hp_cons"=house$hp_el_cons,
+                       "hp_status"=house$`hp_status_command (u1)`,
+                       "hp_tset"=house$`hp_supply_temp_command(u2)`,
+                       "hp_cop"=house$COP,
+                       "tfloor"=house$HeatPump_actual_Tsup,
+                       "ti"=house$`Building's representative Temperature of the current time step(volume-averaged)`,
+                       "hg"=rowSums(house[,grepl("_sum__hin_",colnames(house))]),
+                       #"air_h"=rowSums(house[,grepl("_SUA_IHS_elP",colnames(house))]),
+                       #"air_s"=rowSums(house[,grepl("_SUA_fan_elP",colnames(house))]),
+                       #"air_e"=rowSums(house[,grepl("_EHA_fan_elP",colnames(house))]),
+                       "vent"=rowSums(
+                         data.frame((house$o5_Vent_child1_SUA_AT*house$o5_Vent_child1_SUA_VFR-house$o5_child1_AT*house$o5_Vent_child1_EHA_VFR),
+                                    house$o5_Vent_child2_SUA_AT*house$o5_Vent_child2_SUA_VFR-house$o5_child2_AT*house$o5_Vent_child2_EHA_VFR,
+                                    house$o5_Vent_living_SUA_AT*house$o5_Vent_living_SUA_VFR-(house$o5_living_AT+house$o5_bath_AT)*house$o5_Vent_bath_EHA_VFR
+                         ))
+)
 
 df_weather <- data.frame(
-                 "time"=weather$DATE,
-                 "te"=weather$AmbientAirTemperature,
-                 "GHI"=weather$Radiation_Global,
-                 "BHI"=weather$Radiation_Global-weather$Radiation_Diffuse,
-                 "sunAz"=weather$sunAz,
-                 "sunEl"=weather$sunEl,
-                 "humidity"=weather$RelativeHumidity,
-                 "windSpeed"=weather$WindSpeed,
-                 "windBearing"=weather$WindDirection
+  "time"=weather$DATE,
+  "te"=weather$AmbientAirTemperature,
+  "GHI"=weather$Radiation_Global,
+  "BHI"=weather$Radiation_Global-weather$Radiation_Diffuse,
+  "sunAz"=weather$sunAz,
+  "sunEl"=weather$sunEl,
+  "humidity"=weather$RelativeHumidity,
+  "windSpeed"=weather$WindSpeed,
+  "windBearing"=weather$WindDirection
 )
 
 df <- merge(df_house,df_weather)
@@ -99,7 +99,7 @@ features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "mod_ti_infiltrations"=list(min=0,max=2,n=2,class="int"),
                  "sunAzimuth_nharmonics"=list(min=2,max=5,n=3,class="int"),
                  "windBearing_nharmonics"=list(min=2,max=5,n=3,class="int")
-                 )
+)
 
 optimization_results <- suppressMessages(
   ga(
@@ -198,84 +198,84 @@ plot_results(mod = mod_q, plot_file = sprintf("results/%s_baxi_output_q_%s.pdf",
              df = df_mod, height_coeffs=7, width_coeffs=8.5, ncol_coeffs=3)
 
 
-    write.csv(broom::tidy(mod_ti),sprintf("results/%s_mod_ti_summary_coefficients.csv",contractId),row.names = F)
-    write.csv(
-      cbind(
-        broom::glance(mod_ti),
-        as.data.frame(t(unlist(rmserr(mod_ti$fitted.values,mod_ti$model$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
-        as.data.frame(t(unlist(rmserr(val_ti$ti,val_ti$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
-        t(params)
-      ),
-      sprintf("results/%s_mod_ti_summary_accuracy.csv",contractId),row.names = F
-    )
-    
-    write.csv(broom::tidy(mod_q),sprintf("results/%s_mod_q_summary_coefficients.csv",contractId),row.names = F)
-    write.csv(
-      cbind(
-        broom::glance(mod_q),
-        as.data.frame(t(unlist(rmserr(mod_q$fitted.values,mod_q$model$value_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
-        as.data.frame(t(unlist(rmserr(val_q$value,val_q$value_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
-        t(params)
-      ),
-      sprintf("results/%s_mod_q_summary_accuracy.csv",contractId),row.names = F
-    )
-    
-    colnames(val_ti) <- c("time","real","predicted")
-    colnames(val_q) <- c("time","real","predicted")
-    pvalti <- ggplot(reshape2::melt(pad(val_ti),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
-      theme(text= element_text(size=15, family="CM Roman"),
-            axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
-            axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
-            strip.background = element_blank(),legend.title = element_blank(),
-            strip.text.x = element_blank()) + 
-      scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote("T"^"i"),bquote(widehat("T"^"i")))) +
-      ylab(bquote(degree*"C"))
-    pvalq <- ggplot(reshape2::melt(pad(val_q),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
-      theme(text= element_text(size=15, family="CM Roman"),
-            axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
-            axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
-            strip.background = element_blank(),legend.title = element_blank(),
-            strip.text.x = element_blank()) + 
-      scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote(Phi^"h"),bquote(widehat(Phi^"h")))) +
-      ylab(bquote("kWh"))
-    pdf(sprintf("results/%s_accuracy_validation.pdf",contractId),width=7,height = 3)
-    print(plot_grid(plotlist = list(pvalti,pvalq),ncol = 1,align = T))
-    dev.off()
-    embed_fonts(sprintf("results/%s_accuracy_validation.pdf",contractId),outfile=sprintf("results/%s_accuracy_validation.pdf",contractId))
-    
-    # Results
-    result <- data.frame(contractId,t(results_multiple_setpoints[["summary"]]),
-                         temp_off,temp_comfort,
-                         t(unlist(rmserr(mod_q$model$value_l0,mod_q$fitted.values))),
-                         t(unlist(rmserr(mod_ti$model$ti_l0,mod_ti$fitted.values))))
-    colnames(result) <-
-      c("contractId","case","q_real","q_pred","savings","temp_off","temp_comfort",
-        "q_train_mae","q_train_mse","q_train_rmse","q_train_mape","q_train_nmse","q_train_rstd",
-        "ti_train_mae","ti_train_mse","ti_train_rmse","ti_train_mape","ti_train_nmse","ti_train_rstd")
-    
-    # # Real-predicted model comparison
-    # predv <- results_multiple_setpoints$df[results_multiple_setpoints$df$setpoint_name=="real",]
-    # predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","ti_l0","setpoint_name")],c("time","setpoint_name")))
-    # temp_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
-    #   theme_bw()
-    # predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","value_l0","setpoint_name")],c("time","setpoint_name")))
-    # value_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
-    #   theme_bw()
-    # plot_grid(plotlist = list(temp_scenarios,value_scenarios))
-    
-    # # plot_residuals(value_repr = "Temperature",residuals = predv$ti-predv$ti_l0)
-    # plotly::ggplotly(ggplot(predv) + geom_line(aes(time,ti)) + geom_line(aes(time,ti_l0),col="red"))
-    # # plot_residuals(value_repr = "Consumption",residuals = predv$value-predv$value_l0)
-    # plotly::ggplotly(ggplot(predv) + geom_line(aes(time,value)) + geom_line(aes(time,value_l0),col="red"))
-    # 
-    # # Plot the real value and the predicted value by the model
-    # df_mod$pred <- ifelse(df_mod$status==1,predict(mod_q,df_mod),0)
-    # df_mod <- pad(df_mod)
-    # ggplot(df_mod)+
-    #   geom_line(aes(time,value_l0),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
-    # df_mod$pred <- predict(mod_ti,df_mod)
-    # ggplot(df_mod)+
-    #   geom_line(aes(time,ti),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
+write.csv(broom::tidy(mod_ti),sprintf("results/%s_mod_ti_summary_coefficients.csv",contractId),row.names = F)
+write.csv(
+  cbind(
+    broom::glance(mod_ti),
+    as.data.frame(t(unlist(rmserr(mod_ti$fitted.values,mod_ti$model$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
+    as.data.frame(t(unlist(rmserr(val_ti$ti,val_ti$ti_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
+    t(params)
+  ),
+  sprintf("results/%s_mod_ti_summary_accuracy.csv",contractId),row.names = F
+)
+
+write.csv(broom::tidy(mod_q),sprintf("results/%s_mod_q_summary_coefficients.csv",contractId),row.names = F)
+write.csv(
+  cbind(
+    broom::glance(mod_q),
+    as.data.frame(t(unlist(rmserr(mod_q$fitted.values,mod_q$model$value_l0)))) %>% dplyr::rename_all(function(x) paste0("train_", x)),
+    as.data.frame(t(unlist(rmserr(val_q$value,val_q$value_l0)))) %>% dplyr::rename_all(function(x) paste0("val_", x)),
+    t(params)
+  ),
+  sprintf("results/%s_mod_q_summary_accuracy.csv",contractId),row.names = F
+)
+
+colnames(val_ti) <- c("time","real","predicted")
+colnames(val_q) <- c("time","real","predicted")
+pvalti <- ggplot(reshape2::melt(pad(val_ti),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
+  theme(text= element_text(size=15, family="CM Roman"),
+        axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
+        axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
+        strip.background = element_blank(),legend.title = element_blank(),
+        strip.text.x = element_blank()) + 
+  scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote("T"^"i"),bquote(widehat("T"^"i")))) +
+  ylab(bquote(degree*"C"))
+pvalq <- ggplot(reshape2::melt(pad(val_q),"time")) + geom_line(aes(time,value,col=variable),alpha=0.8) + theme_bw() + 
+  theme(text= element_text(size=15, family="CM Roman"),
+        axis.text = element_text(size=15, family="CM Roman"),legend.direction = "vertical",legend.justification="left",
+        axis.title.x = element_blank(), legend.text.align = 0, legend.position="right",
+        strip.background = element_blank(),legend.title = element_blank(),
+        strip.text.x = element_blank()) + 
+  scale_color_manual(values=c("black","red"), name = bquote(""), labels = c(bquote(Phi^"h"),bquote(widehat(Phi^"h")))) +
+  ylab(bquote("kWh"))
+pdf(sprintf("results/%s_accuracy_validation.pdf",contractId),width=7,height = 3)
+print(plot_grid(plotlist = list(pvalti,pvalq),ncol = 1,align = T))
+dev.off()
+embed_fonts(sprintf("results/%s_accuracy_validation.pdf",contractId),outfile=sprintf("results/%s_accuracy_validation.pdf",contractId))
+
+# Results
+result <- data.frame(contractId,t(results_multiple_setpoints[["summary"]]),
+                     temp_off,temp_comfort,
+                     t(unlist(rmserr(mod_q$model$value_l0,mod_q$fitted.values))),
+                     t(unlist(rmserr(mod_ti$model$ti_l0,mod_ti$fitted.values))))
+colnames(result) <-
+  c("contractId","case","q_real","q_pred","savings","temp_off","temp_comfort",
+    "q_train_mae","q_train_mse","q_train_rmse","q_train_mape","q_train_nmse","q_train_rstd",
+    "ti_train_mae","ti_train_mse","ti_train_rmse","ti_train_mape","ti_train_nmse","ti_train_rstd")
+
+# # Real-predicted model comparison
+# predv <- results_multiple_setpoints$df[results_multiple_setpoints$df$setpoint_name=="real",]
+# predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","ti_l0","setpoint_name")],c("time","setpoint_name")))
+# temp_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
+#   theme_bw()
+# predv_melted <- pad(reshape2::melt(results_multiple_setpoints$df[,c("time","value_l0","setpoint_name")],c("time","setpoint_name")))
+# value_scenarios <- ggplot(predv_melted) + geom_line(aes(time,value)) + facet_wrap(~setpoint_name,ncol=1,strip.position = "right") +
+#   theme_bw()
+# plot_grid(plotlist = list(temp_scenarios,value_scenarios))
+
+# # plot_residuals(value_repr = "Temperature",residuals = predv$ti-predv$ti_l0)
+# plotly::ggplotly(ggplot(predv) + geom_line(aes(time,ti)) + geom_line(aes(time,ti_l0),col="red"))
+# # plot_residuals(value_repr = "Consumption",residuals = predv$value-predv$value_l0)
+# plotly::ggplotly(ggplot(predv) + geom_line(aes(time,value)) + geom_line(aes(time,value_l0),col="red"))
+# 
+# # Plot the real value and the predicted value by the model
+# df_mod$pred <- ifelse(df_mod$status==1,predict(mod_q,df_mod),0)
+# df_mod <- pad(df_mod)
+# ggplot(df_mod)+
+#   geom_line(aes(time,value_l0),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
+# df_mod$pred <- predict(mod_ti,df_mod)
+# ggplot(df_mod)+
+#   geom_line(aes(time,ti),group=1)+  geom_line(aes(time,pred),col=2,group=1) + theme_bw()
   }
   return(result)
   },error=function(e){return(NULL)})
