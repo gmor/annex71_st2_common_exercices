@@ -6,11 +6,11 @@ library(splines)
 library(mgcv)
 
 # Libraries for graphics
-library(cowplot)
+# library(cowplot)
 library(ggplot2)
 library(gridExtra)
-library(extrafont)
-loadfonts()
+# library(extrafont)
+# loadfonts()
 
 # Libraries for data wrangling
 library(padr)
@@ -321,9 +321,9 @@ predv$hourly_optimized_price = df_price$price * predv$hp_cons_l0
 old_price = sum(df_price$price * df[rows_to_filter, "hp_cons"])
 predv$hourly_old_price = df_price$price * df[rows_to_filter, "hp_cons"]
 
-diff = old_price - optimized_price
-# Savings respect to the old_price?
-saving = diff/old_price
+# diff = old_price - optimized_price
+# # Savings respect to the old_price?
+# saving = diff/old_price
 
 
 p <- grid.arrange(
@@ -499,7 +499,7 @@ for (date in as.character(val_dates)) {
     top = paste0("Savings = ",round(saving, digits = 2)*100,"%")
   )
   
-  ggsave(plot = p, filename = paste0("MPC_savings_",date,".pdf"))
+  # ggsave(plot = p, filename = paste0("MPC_savings_",date,".pdf"))
   
 }
 
