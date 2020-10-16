@@ -186,102 +186,119 @@ calculate_error <- function(y_actual, y_pred){
   )
 }
 
-calculate_many_errors <- function(val_dates){
-  
-  for (i in 1:length(val_dates)) {
-    
-    date = val_dates[i]
-    rows_to_filter = as.Date(predv$time,"Europe/Madrid") %in% val_dates[i]
-    
-    df_goodness <- calculate_goodness(y_actual = y_actual, y_pred = y_pred)
-    df_error <- calculate_error(y_actual = y_actual, y_pred = y_pred)
-    
-    print(df_goodness)
-    
-    df_day_aux <- data.frame(date = date, 
-                             R_squared = df_goodness$R_squared, 
-                             goodness_fit = df_goodness$goodness_fit, 
-                             rmse = df_error$rmse,
-                             nrmse = df_error$nrmse 
-    )
-    df_day <- rbind(df_day, df_day_aux)
-  }
-} 
+# calculate_many_errors <- function(val_dates){
+#   
+#   for (i in 1:length(val_dates)) {
+#     
+#     i = 1
+#     date = val_dates[i]
+#     rows_to_filter = as.Date(predv$time,"Europe/Madrid") %in% val_dates[i]
+#     
+#     df_goodness <- calculate_goodness(y_actual = y_actual, y_pred = y_pred)
+#     df_error <- calculate_error(y_actual = y_actual, y_pred = y_pred)
+#     
+#     print(df_goodness)
+#     
+#     df_day_aux <- data.frame(date = date, 
+#                              R_squared = df_goodness$R_squared, 
+#                              goodness_fit = df_goodness$goodness_fit, 
+#                              rmse = df_error$rmse,
+#                              nrmse = df_error$nrmse 
+#     )
+#     df_day <- rbind(df_day, df_day_aux)
+#   }
+# } 
 
 
-df_day <- data.frame(date = character(), 
-                     R_squared = numeric(),
-                     goodness_fit = numeric(), 
-                     R_squared_2 = numeric(),
-                     rmse = numeric(), 
-                     nrmse = numeric())
+# df_day <- data.frame(date = character(), 
+#                      R_squared = numeric(),
+#                      goodness_fit = numeric(), 
+#                      R_squared_2 = numeric(),
+#                      rmse = numeric(), 
+#                      nrmse = numeric())
 
-# vector_hours <- c(23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-vector_hours <- c(23, 0, 1, 2)
 
-for (k in 1:length(val_dates)) {
- 
-  # k = 1
-  val_date = val_dates[k]
+vector_hours_complete <- c(23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+# vector_hours <- c(23, 0, 1, 2, 3, 4, 5, 6, 7)
 
-  predv <- prediction_scenario(
-    mod_q = mod_q, 
-    mod_ti = mod_ti,
-    mod_tsupply = mod_tsupply,
-    df = df,
-    rows_to_filter = (as.Date(df$time,"Europe/Madrid") %in% val_date & hour(df$time) %in% vector_hours) ,
-    hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
-    params = params,
-    ts_prediction = NULL
-  )
-  
-  # grid.arrange(
-  #   ggplot(predv)+
-  #     geom_line(aes(time,tsupply))+
-  #     geom_line(aes(time,tsupply_l0),col=2)+
-  #     geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
-  #     ylab("Supply temperature [ºC]")+
-  #     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
-  #     scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
-  #     theme_bw(),
-  p <- ggplot(predv)+
-      geom_line(aes(time,ti))+
-      geom_line(aes(time,ti_l0),col=2)+
-      ylab("Indoor temperature [ºC]")+
-      facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
-      scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
-      theme_bw() 
-  #   ggplot(predv)+
-  #     geom_line(aes(time,hp_cons))+
-  #     geom_line(aes(time,hp_cons_l0),col=2)+
-  #     ylab("HP electricity [Wh]")+
-  #     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
-  #     scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
-  #     theme_bw(),
-  #   ncol=1
-  # )
-  ggsave(filename = paste0(val_date, "prediction.pdf"), plot = p)
+# vector_hours <- c(23, 0, 1, 2)
+steps = c(2:12)
 
-  # df_input <- rbind(predv[, colnames(df_original)], df[(as.Date(df$time,"Europe/Madrid") %in% val_date & hour(df$time) %in% (0:23)[!(0:23 %in% vector_hours)]), ])
-  
-  y_actual = predv$ti
-  y_pred = predv$ti_l0
-  df_goodness <- calculate_goodness(y_actual = y_actual, y_pred = y_pred)
-  df_error <- calculate_error(y_actual = y_actual, y_pred = y_pred)
-  
-  df_day_aux <- data.frame(date = val_date, 
-                           R_squared = df_goodness$R_squared, 
-                           goodness_fit = df_goodness$goodness_fit, 
-                           R_squared_2 = df_goodness$R_squared_2,
-                           rmse = df_error$rmse,
-                           nrmse = df_error$nrmse 
-  )
-  
-  df_day <- rbind(df_day_aux, df_day)  
+for (l in steps) {
+  # l = steps[1] 
+  vector_hours = vector_hours_complete[1:l]
+  df_day <- data.frame(date = character(), 
+                       R_squared = numeric())
+
+  for (k in 1:length(val_dates)) {
    
-}  
+    # k = 1
+    val_date = val_dates[k]
+  
+    predv <- prediction_scenario(
+      mod_q = mod_q, 
+      mod_ti = mod_ti,
+      mod_tsupply = mod_tsupply,
+      df = df,
+      rows_to_filter = (as.Date(df$time,"Europe/Madrid") %in% val_date & hour(df$time) %in% vector_hours) ,
+      hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
+      params = params,
+      ts_prediction = NULL
+    )
+    
+    # grid.arrange(
+    #   ggplot(predv)+
+    #     geom_line(aes(time,tsupply))+
+    #     geom_line(aes(time,tsupply_l0),col=2)+
+    #     geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
+    #     ylab("Supply temperature [ºC]")+
+    #     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
+    #     scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+    #     theme_bw(),
+    p <- ggplot(predv)+
+        geom_line(aes(time,ti))+
+        geom_line(aes(time,ti_l0),col=2)+
+        ylab("Indoor temperature [ºC]")+
+        facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
+        scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+        theme_bw() 
+    #   ggplot(predv)+
+    #     geom_line(aes(time,hp_cons))+
+    #     geom_line(aes(time,hp_cons_l0),col=2)+
+    #     ylab("HP electricity [Wh]")+
+    #     facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
+    #     scale_x_datetime(date_minor_breaks = "2 hours" , date_labels = "%H:%M") +
+    #     theme_bw(),
+    #   ncol=1
+    # )
+    # ggsave(filename = paste0(val_date, "prediction.pdf"), plot = p)
+  
+    # df_input <- rbind(predv[, colnames(df_original)], df[(as.Date(df$time,"Europe/Madrid") %in% val_date & hour(df$time) %in% (0:23)[!(0:23 %in% vector_hours)]), ])
+    
+    y_actual = predv$ti
+    y_pred = predv$ti_l0
+    df_goodness <- calculate_goodness(y_actual = y_actual, y_pred = y_pred)
+    # df_error <- calculate_error(y_actual = y_actual, y_pred = y_pred)
+    
+    # df_day_aux <- data.frame(date = val_date, 
+    #                          R_squared = df_goodness$R_squared, 
+    #                          goodness_fit = df_goodness$goodness_fit, 
+    #                          R_squared_2 = df_goodness$R_squared_2,
+    #                          rmse = df_error$rmse,
+    #                          nrmse = df_error$nrmse 
+    # )
+    
+    df_day_aux <- data.frame(date = val_date, 
+                             R_squared_2 = df_goodness$R_squared_2)
+    
+    df_day <- rbind(df_day_aux, df_day)  
+     
+  }  
 
+  print(l)
+  print(mean(df_day$R_squared_2))
 
+}
 
 
 
