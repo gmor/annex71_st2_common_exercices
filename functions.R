@@ -63,7 +63,7 @@ tune_model_input <- function(df,params){
   df$windSpeed <- lp_vector(df$windSpeed,params["alpha_ws"])
   
   # Lag the input columns and weather tranformations
-    # HP consumption
+  # HP consumption
   for (l in 0:max(params[c("mod_tsupply_lags_hp_cons","mod_hp_cons_ar","mod_tsupply_ar","mod_ti_lags_dti")])){
     df[,paste0("hp_cons_l",l)] <- dplyr::lag(df[,"hp_cons"],l)
     df[,paste0("hp_status_l",l)] <- dplyr::lag(df[,"hp_status"],l)
@@ -73,7 +73,7 @@ tune_model_input <- function(df,params){
   for (l in 0:max(params[c("mod_hp_cons_lags_tsupply","mod_ti_lags_dti","mod_tsupply_ar")])){
     df[,paste0("tsupply_l",l)] <- dplyr::lag(df[,"tsupply"],l)
   }
-    # Weather and indoor comfort
+  # Weather and indoor comfort
   for (l in 0:max(c(1,params[c("mod_hp_cons_ar","mod_hp_cons_lags_te","mod_hp_cons_lags_humidity","mod_ti_lags_te","mod_hp_cons_lags_tsupply",
                                "mod_ti_lags_infiltrations","mod_tsupply_lags_hp_cons")]))){
     df[,paste0("te_l",l)] <- dplyr::lag(df[,"te"],l)
@@ -117,7 +117,7 @@ tune_model_input <- function(df,params){
   for (l in 0:params["mod_ti_lags_infiltrations"]){
     df[,paste0("infiltrations_l",l)] <- dplyr::lag(df[,"infiltrations"],l)
   }
-
+  
   # Calculate the sunazimuth and windbearing fourier series
   if(params["sunAzimuth_nharmonics"]>0){
     df <- add_fourier_series_sunazimuth(df, sunAzimuth_nharmonics = params["sunAzimuth_nharmonics"], min_solarElevation=-1)
@@ -435,7 +435,7 @@ plot_linear_renovations <- function(result){
     min_val <- min(p_df$value,na.rm=T)
     g <- ggplot(p_df,aes(windBearing, value)) + geom_line() +
       geom_ribbon(aes(x=windBearing,ymin=min_val,ymax=value),fill="red", alpha=0.5) +
-      ggtitle(bquote("W"^"s"*"Â·"*Psi~"response")) + theme_bw() + ylab(bquote(Delta*Phi^"h"*"[kWh]"*"/(W"["s"]*"[m/s]Â·"*Psi*"["*degree*"C])")) + xlim(c(0,24)) +
+      ggtitle(bquote("W"^"s"*"·"*Psi~"response")) + theme_bw() + ylab(bquote(Delta*Phi^"h"*"[kWh]"*"/(W"["s"]*"[m/s]·"*Psi*"["*degree*"C])")) + xlim(c(0,24)) +
       xlab(bquote("wind direction ["*degree*"]")) +      
       theme(axis.text.x=element_text(angle=0, hjust=1),text= element_text(size=14, family="CM Roman"),
             legend.title = element_text(size=10), legend.text = element_text(size=12), axis.text = element_text(size=14, family="CM Roman"))
@@ -443,7 +443,7 @@ plot_linear_renovations <- function(result){
     max_val <- max(p_df$value,na.rm=T)
     g <- ggplot(p_df,aes(windBearing, value)) + geom_line() +
       geom_ribbon(aes(x=windBearing,ymin=value,ymax=max_val),fill="red", alpha=0.5) +
-      ggtitle("W"^"s"*"Â·"*Psi~"response") + theme_bw() + ylab(bquote(Delta*"T"^"i"*"["*degree*"C]"*"/(W"["s"]*"[m/s]Â·"*Psi*"["*degree*"C])")) + xlim(c(0,24)) +
+      ggtitle("W"^"s"*"·"*Psi~"response") + theme_bw() + ylab(bquote(Delta*"T"^"i"*"["*degree*"C]"*"/(W"["s"]*"[m/s]·"*Psi*"["*degree*"C])")) + xlim(c(0,24)) +
       xlab(bquote("wind direction ["*degree*"]")) +
       theme(axis.text.x=element_text(angle=0, hjust=1),text= element_text(size=14, family="CM Roman"),
             legend.title = element_text(size=10), legend.text = element_text(size=12), axis.text = element_text(size=14, family="CM Roman"))
@@ -471,17 +471,17 @@ plot_linear_infiltrations <- function(result){
     if(result$mod$terms[[2]]=="value_l0"){
       g <- ggplot(windtemp_matrix) + geom_line(aes(temp,value)) +
         ylab(bquote(Delta*Phi^"h"*"[kWh]")) + 
-        xlab(bquote("W"^"s"*"[m/s]Â·"*Psi*"["*degree*"C]"))  + theme_bw() +
+        xlab(bquote("W"^"s"*"[m/s]·"*Psi*"["*degree*"C]"))  + theme_bw() +
         theme(text= element_text(size=14, family="CM Roman"),axis.text.x=element_text(angle=0, hjust=1),
               legend.title = element_text(size=10), legend.text = element_text(size=12), axis.text = element_text(size=14, family="CM Roman")) +
-        ggtitle(bquote("W"^"s"*"Â·"*Psi~"response"))
+        ggtitle(bquote("W"^"s"*"·"*Psi~"response"))
     } else {
       g <- ggplot(windtemp_matrix) + geom_line(aes(temp,value)) +
         ylab(bquote(Delta*"T"^"i"*"["*degree*"C]")) + 
-        xlab(bquote("W"^"s"*"[m/s]Â·"*Psi*"["*degree*"C]"))  + theme_bw() +
+        xlab(bquote("W"^"s"*"[m/s]·"*Psi*"["*degree*"C]"))  + theme_bw() +
         theme(text= element_text(size=14, family="CM Roman"),axis.text.x=element_text(angle=0, hjust=1),
               legend.title = element_text(size=10), legend.text = element_text(size=12), axis.text = element_text(size=14, family="CM Roman")) +
-        ggtitle(bquote("W"^"s"*"Â·"*Psi~"response"))
+        ggtitle(bquote("W"^"s"*"·"*Psi~"response"))
     }    
     
     return(g)
@@ -503,7 +503,7 @@ plot_linear_infiltrations <- function(result){
     min_val <- min(p_df$value,na.rm=T)
     g <- ggplot(p_df,aes(windBearing, value)) + geom_line() +
       geom_ribbon(aes(x=windBearing,ymin=min_val,ymax=value),fill="red", alpha=0.5) +
-      ggtitle(bquote("W"^"s"*"Â·"*Psi~"response")) + theme_bw() + ylab(bquote(Delta*Phi^"h"*"[kWh]"*"/(W"["s"]*"[m/s]Â·"*Psi*"["*degree*"C])")) + xlim(c(0,360)) +
+      ggtitle(bquote("W"^"s"*"·"*Psi~"response")) + theme_bw() + ylab(bquote(Delta*Phi^"h"*"[kWh]"*"/(W"["s"]*"[m/s]·"*Psi*"["*degree*"C])")) + xlim(c(0,360)) +
       xlab(bquote("wind direction ["*degree*"]")) +      
       theme(axis.text.x=element_text(angle=0, hjust=1),text= element_text(size=14, family="CM Roman"),
             legend.title = element_text(size=10), legend.text = element_text(size=12), axis.text = element_text(size=14, family="CM Roman"))
@@ -511,7 +511,7 @@ plot_linear_infiltrations <- function(result){
     max_val <- max(p_df$value,na.rm=T)
     g <- ggplot(p_df,aes(windBearing, value)) + geom_line() +
       geom_ribbon(aes(x=windBearing,ymin=value,ymax=max_val),fill="red", alpha=0.5) +
-      ggtitle("W"^"s"*"Â·"*Psi~"response") + theme_bw() + ylab(bquote(Delta*"T"^"i"*"["*degree*"C]"*"/(W"["s"]*"[m/s]Â·"*Psi*"["*degree*"C])")) + xlim(c(0,360)) +
+      ggtitle("W"^"s"*"·"*Psi~"response") + theme_bw() + ylab(bquote(Delta*"T"^"i"*"["*degree*"C]"*"/(W"["s"]*"[m/s]·"*Psi*"["*degree*"C])")) + xlim(c(0,360)) +
       xlab(bquote("wind direction ["*degree*"]")) +
       theme(axis.text.x=element_text(angle=0, hjust=1),text= element_text(size=14, family="CM Roman"),
             legend.title = element_text(size=10), legend.text = element_text(size=12), axis.text = element_text(size=14, family="CM Roman"))
@@ -687,7 +687,7 @@ printlm <- function(mod, df, value_column, value_repr, ncol, irf_objects=NULL){
   }
   plot_list <- plot_list[!vapply(plot_list, is.null, logical(1))]
   print(plot_grid(plotlist=plot_list,ncol = ncol,align = c("h","v")))
-
+  
 }
 
 calculate_model_ti <- function(params, df, train_dates, output="aic"){
@@ -746,7 +746,7 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
 
 calculate_model_q <- function(params, df, train_dates, output="aic"){
   
-
+  
   df <- tune_model_input(df,params)
   
   
@@ -756,18 +756,18 @@ calculate_model_q <- function(params, df, train_dates, output="aic"){
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("hp_cons_l0 ~ 
       1 + %s + %s + %s",
-      paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
-      paste0(mapply(function(x){sprintf("bs(tsupply_l%s):bs(ti_l%s)",x,x)},1:1),collapse=" + "),
-      paste0("te_raw_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + ")
-      # paste0(mapply(function(x){sprintf("hp_cons_l%s:humidity_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
-      # paste0(mapply(function(x){sprintf("hp_cons_l%s:te_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
-      # paste0("hp_cons_l",1:params["mod_hp_cons_ar"],"",collapse=" + "),
-      # paste0("te_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + "),
-      # paste0("bs(dtf_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
-      # paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
-      # #paste0("ti_l",0:params["lags_dti"],"",collapse=" + "),
-      # paste0("humidity_l",0:params["mod_hp_cons_lags_humidity"],"",collapse=" + ")
-      #paste0(mapply(function(x){sprintf("bs(te_l%s,knots=1,degree=2):bs(humidity_l%s,knots=1,degree=2)",x,x)},0:max(params[c("mod_hp_cons_lags_te","mod_hp_cons_lags_humidity")])),collapse=" + ")
+                                paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
+                                paste0(mapply(function(x){sprintf("bs(tsupply_l%s):bs(ti_l%s)",x,x)},1:1),collapse=" + "),
+                                paste0("te_raw_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + ")
+                                # paste0(mapply(function(x){sprintf("hp_cons_l%s:humidity_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
+                                # paste0(mapply(function(x){sprintf("hp_cons_l%s:te_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
+                                # paste0("hp_cons_l",1:params["mod_hp_cons_ar"],"",collapse=" + "),
+                                # paste0("te_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + "),
+                                # paste0("bs(dtf_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
+                                # paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
+                                # #paste0("ti_l",0:params["lags_dti"],"",collapse=" + "),
+                                # paste0("humidity_l",0:params["mod_hp_cons_lags_humidity"],"",collapse=" + ")
+                                #paste0(mapply(function(x){sprintf("bs(te_l%s,knots=1,degree=2):bs(humidity_l%s,knots=1,degree=2)",x,x)},0:max(params[c("mod_hp_cons_lags_te","mod_hp_cons_lags_humidity")])),collapse=" + ")
   ))
   
   mod <- lm(formula, data=df[df$hp_status>0,])
@@ -786,7 +786,7 @@ calculate_model_q <- function(params, df, train_dates, output="aic"){
 
 calculate_model_tsupply <- function(params, df, train_dates, output="aic"){
   
- 
+  
   df <- tune_model_input(df,params)
   
   df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
@@ -795,13 +795,13 @@ calculate_model_tsupply <- function(params, df, train_dates, output="aic"){
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("tsupply_l0 ~ 
       0 + %s + %s",
-      # paste0(mapply(function(x){sprintf("bs(tsupply_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
-      paste0(mapply(function(x){sprintf("bs(tsupply_l%s)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
-      paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tsupply_lags_hp_cons"]),collapse=" + ")
-      #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
-      #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
-      #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
-      #paste0("ti_l",1:max(1,params["lags_ti"]),"",collapse=" + ")
+                                # paste0(mapply(function(x){sprintf("bs(tsupply_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
+                                paste0(mapply(function(x){sprintf("bs(tsupply_l%s)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
+                                paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tsupply_lags_hp_cons"]),collapse=" + ")
+                                #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
+                                #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
+                                #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
+                                #paste0("ti_l",1:max(1,params["lags_ti"]),"",collapse=" + ")
   ))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
@@ -847,7 +847,7 @@ plot_residuals <- function(mod=NULL, value_column=NULL, value_repr, residuals =N
   plot(residuals, type="l",ylim=c(mean(residuals)-5*sd(residuals),mean(residuals)+5*sd(residuals)),
        cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex, ylab=value_repr)
   # title(paste0("Structure: ",str_val," \n n/m order: ",floor(mod$n),"/",floor(mod$m), " - alphaTemp = ",round(mod$lpf_temperature_coeff,2), 
-  #              "\n balanceTemp = ",round(mod$tbal,2)," ÂºC"), line=0.7)
+  #              "\n balanceTemp = ",round(mod$tbal,2)," ºC"), line=0.7)
 }
 
 
@@ -855,7 +855,7 @@ plot_residuals <- function(mod=NULL, value_column=NULL, value_repr, residuals =N
 
 
 printgam <- function (mod, value_column, value_repr, irf_objects, ncol=2, ask = TRUE, pages = 1,...){
-
+  
   labeller_ <- function(lab){
     if(grepl("dayhour",lab)){
       lab <-gsub("_f_"," ", lab)
@@ -941,7 +941,7 @@ printgam <- function (mod, value_column, value_repr, irf_objects, ncol=2, ask = 
                                   plot.title = element_blank())
     return(.l)
   }
-   
+  
   b = getViz(mod)
   x = plot(b, allTerms=T)
   
@@ -952,7 +952,7 @@ printgam <- function (mod, value_column, value_repr, irf_objects, ncol=2, ask = 
         x$plots[[.kk]]
       }
     }
-    )
+  )
   x$plots <- Filter(Negate(is.null), x$plots)
   
   # Generate the cleaned gList
@@ -1007,16 +1007,16 @@ plot_results <- function(mod, plot_file, value_column, value_repr, value_repr_re
         geom_line(aes(time,as.numeric(value),col=variable,group=1)) + 
         facet_wrap(~variable,nrow=8,scales="free_y") + theme_bw() +
         ylab("") + scale_color_brewer(palette = "Dark2",
-          name = "", labels = c(
-            bquote("I"^"sol"~"[W/"*"m"^"2"*"]"),
-            bquote("T"^"i"~"["*degree*"C]"),
-            bquote("T"^"e"~"["*degree*"C]"),
-            bquote("T"^"f"~"["*degree*"C]"),
-            bquote(Phi^"h"~"[kWh]"),
-            bquote("V"^"i"~"[m/sÂ·"*degree*"C]"),
-            bquote("V"^"a"~"[m"^"3"*"/hÂ·"*degree*"C]"),
-            bquote("G"^"h"~"[W]"))
-          )+
+                                      name = "", labels = c(
+                                        bquote("I"^"sol"~"[W/"*"m"^"2"*"]"),
+                                        bquote("T"^"i"~"["*degree*"C]"),
+                                        bquote("T"^"e"~"["*degree*"C]"),
+                                        bquote("T"^"f"~"["*degree*"C]"),
+                                        bquote(Phi^"h"~"[kWh]"),
+                                        bquote("V"^"i"~"[m/s·"*degree*"C]"),
+                                        bquote("V"^"a"~"[m"^"3"*"/h·"*degree*"C]"),
+                                        bquote("G"^"h"~"[W]"))
+        )+
         theme(text= element_text(size=15, family="CM Roman"),
               axis.text = element_text(size=15, family="CM Roman"),
               plot.title = element_blank(), legend.position="bottom",
@@ -1032,42 +1032,42 @@ plot_results <- function(mod, plot_file, value_column, value_repr, value_repr_re
       if(sum(grepl("ti_l1",names(mod$coefficients)))>0){
         irf_objects <- list(
           "ti_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=168, pattern_ar_coefficients = "ti_l",
-                   pattern_seasonality = NULL, title=bquote("T"["k<0"]^"i"*"=0;"~"T"["k">="0"]^"i"*"=1"),
-                   name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-                   y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]")),
+                          pattern_seasonality = NULL, title=bquote("T"["k<0"]^"i"*"=0;"~"T"["k">="0"]^"i"*"=1"),
+                          name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
+                          y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]")),
           "te_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "^te_l",
-                   pattern_seasonality = NULL, title=bquote("T"["k<0"]^"e,lp"*"=0;"~"T"["k">="0"]^"e,lp"*"=1"),
-                   name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-                   y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]"), exhogenous_coeff=T),
-          "te4_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "te4_l",
-                          pattern_seasonality = NULL, title=bquote("T"["k<0"]^"e,lp"^4*"=0;"~"T"["k">="0"]^"e,lp"^4*"=1"),
+                          pattern_seasonality = NULL, title=bquote("T"["k<0"]^"e,lp"*"=0;"~"T"["k">="0"]^"e,lp"*"=1"),
                           name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
                           y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]"), exhogenous_coeff=T),
+          "te4_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "te4_l",
+                           pattern_seasonality = NULL, title=bquote("T"["k<0"]^"e,lp"^4*"=0;"~"T"["k">="0"]^"e,lp"^4*"=1"),
+                           name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
+                           y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]"), exhogenous_coeff=T),
           "value_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "value_l",
-                   pattern_seasonality = NULL, title=bquote(Phi["k<0"]^"h"*"=0;"~Phi["k">="0"]^"h"*"=1"),
-                   name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-                   y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]"), exhogenous_coeff=T)
+                             pattern_seasonality = NULL, title=bquote(Phi["k<0"]^"h"*"=0;"~Phi["k">="0"]^"h"*"=1"),
+                             name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
+                             y_label=bquote(Delta*"T"["k"]^"i"*"["*degree*"C]"), exhogenous_coeff=T)
         )
       }
     } else if (value_column=="value_l0"){
-        irf_objects <- list(
-          "value_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "value_l",
-               pattern_seasonality = "status", title=bquote(Phi["k<0"]^"h"*"=0;"~Phi["k">="0"]^"h"*"=1"),
-               name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-               y_label=bquote(Delta*Phi^"h"["k"]^"h")),
-          "dte_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "^dte_l",
-                          pattern_seasonality = NULL, title=bquote(Psi["k<0"]*"=0;"~Psi["k">="0"]*"=1"),
-                          name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-                          y_label=bquote(Delta*Phi^"h"["k"]^"h"), exhogenous_coeff=T),
-          "dti_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "dti_l",
-                           pattern_seasonality = NULL, title=bquote(Theta["k<0"]*"=0;"~Theta["k">="0"]*"=1"),
+      irf_objects <- list(
+        "value_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "value_l",
+                           pattern_seasonality = "status", title=bquote(Phi["k<0"]^"h"*"=0;"~Phi["k">="0"]^"h"*"=1"),
                            name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-                           y_label=bquote(Delta*Phi^"h"["k"]^"h"), exhogenous_coeff=T),
-          "te_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "^te_l",
-                           pattern_seasonality = NULL, title=bquote("T"["k<0"]^"e,lp"^4*"=0;"~"T"["k">="0"]^"e,lp"^4*"=1"),
-                           name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
-                           y_label=bquote(Delta*Phi^"h"["k"]^"h"), exhogenous_coeff=T)
-        )
+                           y_label=bquote(Delta*Phi^"h"["k"]^"h")),
+        "dte_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "^dte_l",
+                         pattern_seasonality = NULL, title=bquote(Psi["k<0"]*"=0;"~Psi["k">="0"]*"=1"),
+                         name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
+                         y_label=bquote(Delta*Phi^"h"["k"]^"h"), exhogenous_coeff=T),
+        "dti_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "dti_l",
+                         pattern_seasonality = NULL, title=bquote(Theta["k<0"]*"=0;"~Theta["k">="0"]*"=1"),
+                         name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
+                         y_label=bquote(Delta*Phi^"h"["k"]^"h"), exhogenous_coeff=T),
+        "te_l"=plot_irf(linear_coefficients=mod$coefficients, impulse_lags=24, pattern_ar_coefficients = "^te_l",
+                        pattern_seasonality = NULL, title=bquote("T"["k<0"]^"e,lp"^4*"=0;"~"T"["k">="0"]^"e,lp"^4*"=1"),
+                        name_seasonality_factor=bquote(Phi['t']^'h'*'>0'),
+                        y_label=bquote(Delta*Phi^"h"["k"]^"h"), exhogenous_coeff=T)
+      )
       
     }
     
@@ -1130,7 +1130,7 @@ predict_multiple_setpoints <- function(contractId, mod_q, mod_ti, temp_off, temp
       "summary"=mapply(function(i){results_multiple_setpoints[[i]][["summary"]]},1:length(results_multiple_setpoints)),
       "df"=lapply(1:length(results_multiple_setpoints),function(i){
         data.frame("setpoint_name"=names(results_multiple_setpoints)[i],results_multiple_setpoints[[i]][["df"]])
-        }) %>% plyr::ldply(rbind)
+      }) %>% plyr::ldply(rbind)
     )
   )
 }
@@ -1148,8 +1148,8 @@ plot_prediction_setpoint <- function(predv, plot_file, validation_case=F){
   savings <- round(ifelse(act==0, 0, ((pred - act) / act) * 100),2)
   if(validation_case==T){
     txt_savings <- bquote(scriptstyle(sum(widehat(Phi^"h"))*"="*.(round(pred,0))~"kWh"~"(RMSE "*
-                            widehat(Phi^"h")*"= "*.(round(rmse_q,2))*" kWh,  RMSE "*widehat("T"^"i")*"= "*
-                            .(round(rmse_ti,2))*degree*"C)"))
+                                        widehat(Phi^"h")*"= "*.(round(rmse_q,2))*" kWh,  RMSE "*widehat("T"^"i")*"= "*
+                                        .(round(rmse_ti,2))*degree*"C)"))
   } else {
     txt_savings <- ifelse(savings>0,sprintf(" (Savings: +%s%%)",as.character(savings)),sprintf(" (Savings: %s%%)",as.character(savings)))
     txt_savings <- bquote(scriptstyle(sum(widehat(Phi^"h"))*"="*.(round(pred,0))~"kWh"~.(txt_savings)))
@@ -1157,13 +1157,13 @@ plot_prediction_setpoint <- function(predv, plot_file, validation_case=F){
   txt_act <- bquote(scriptstyle(sum(Phi^"h")*"="*.(round(act,0))~"kWh"))
   
   df_value <- reshape2::melt(predv[,c("time",
-                                        #"value",
-                                        "value_l0")],"time")
+                                      #"value",
+                                      "value_l0")],"time")
   qs_virtual <- ggplot(df_value) + geom_line(aes(time,value,color=variable), size=0.3) +
     scale_color_manual(values=c(
       #"black",
       "blue"
-      ), name = bquote(""), labels = c(
+    ), name = bquote(""), labels = c(
       #bquote(Phi^"h"),
       bquote(widehat(Phi^"h"))
     )) + theme_bw() +
@@ -1202,8 +1202,8 @@ plot_prediction_setpoint <- function(predv, plot_file, validation_case=F){
     theme_bw() + ylim(c(min_temp,max_temp)) +
     scale_color_manual(values=c("azure4","black"),
                        name = bquote(""), labels = c(
-      bquote("T"^"s"),
-      bquote("T"^"i"))
+                         bquote("T"^"s"),
+                         bquote("T"^"i"))
     ) +
     theme(text= element_text(size=15, family="CM Roman"), legend.position="right",
           axis.text = element_text(size=15, family="CM Roman"),axis.text.x = element_blank(),
@@ -1218,9 +1218,9 @@ plot_prediction_setpoint <- function(predv, plot_file, validation_case=F){
     scale_color_manual(values = c("azure4",
                                   #"black",
                                   "blue"), name = bquote(""), labels = c(
-      bquote("T"^"s,sim"),
-      #bquote("T"^"i"),
-      bquote(widehat("T"^"i")))
+                                    bquote("T"^"s,sim"),
+                                    #bquote("T"^"i"),
+                                    bquote(widehat("T"^"i")))
     ) +
     theme(text= element_text(size=15, family="CM Roman"),
           axis.text = element_text(size=15, family="CM Roman"),
@@ -1231,7 +1231,7 @@ plot_prediction_setpoint <- function(predv, plot_file, validation_case=F){
     ylab(bquote(degree*"C"))
   pdf(plot_file,height=6,width=9)
   print(cowplot::plot_grid(qs_real,temperatures_real,qs_virtual,temperatures_virtual,ncol = 1,align = "v",
-                     rel_heights = c(0.95,0.8,0.95,1.1)))
+                           rel_heights = c(0.95,0.8,0.95,1.1)))
   dev.off()
   #grid.arrange(grobs=list(),heights=c(1,0.8,1.0))
   embed_fonts(plot_file,outfile = plot_file)
@@ -1368,17 +1368,21 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
   #df <- df[complete.cases(df),]
   
   df$date <- as.Date(df$time, tz="Europe/Berlin")
+
+  # # CHANGED HERE:
+  # if(is.null(ts_prediction)){
+  #   ts_prediction <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
+  # }
   
-  if(is.null(ts_prediction)){
-    ts_prediction <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
-  }
+  ts_prediction <- df$time[1]
   
   # Simulate by sets of 24h from the ts_prediction
   df <- lapply(ts_prediction,function(ts_){
     
     # Filter the initial dataset 
     # ts_ = ts_prediction[1]
-    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(23)),]
+    # df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(23)),]
+    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(11)),]
     df_$ts_prediction <- ts_
     
     # Assign the control variables of the scenario
@@ -1400,8 +1404,8 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
         if(df_$hp_cons_l0[i]>0){
           # df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
           df_$ti_l0[i] <- predict(mod_ti, df_[i,])
-        # If heat pump consumption estimation is negative, then consider the indoor and 
-        # floor temperatures estimated with free floating conditions
+          # If heat pump consumption estimation is negative, then consider the indoor and 
+          # floor temperatures estimated with free floating conditions
         } else {
           df_$hp_cons_l0[i] <- 0
           df_$hp_status_l0[i] <- 0
@@ -1447,95 +1451,95 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
 
 # WORKING HERE WITH SEVERAL PROBLEMS:
 
-prediction_scenario_different_steps <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=NULL, hp_tset_24h, params, ts_prediction=NULL){
-  
-  # df <- df_original
-  # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates[1]
-  # hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset)
-
-  df <- tune_model_input(df,params)
-  if(!is.null(rows_to_filter) && sum(rows_to_filter,na.rm=T)>0){ 
-    df <- df[rows_to_filter,]
-    hp_tset_24h <- hp_tset_24h[rows_to_filter]
-  }
-  #df <- df[complete.cases(df),]
-  
-  df$date <- as.Date(df$time, tz="Europe/Berlin")
-  
-  if(is.null(ts_prediction)){
-    ts_prediction_initial <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
-  }
-
-  ts_prediction <- ts_prediction_initial
-  # ts_prediction <- format(ts_prediction,"%Y-%m-%d %H:%M:%S %Z")  
-  # ts_prediction <- as.POSIXct(x = ts_prediction, tz = "UTC")
-  # browser()
-  # Simulate by sets of 24h from the ts_prediction
-  # df <- lapply(ts_prediction,function(ts_){
-  
-  # Filter the initial dataset 
-  ts_ = ts_prediction
-  df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(12)),]
-  df_$ts_prediction <- ts_
-  
-  # Assign the control variables of the scenario
-  df_$hp_tset_l0 <- as.numeric(hp_tset_24h[df$time %in% df_$time])
-  df_$hp_status_l0 <- ifelse(is.na(hp_tset_24h[df$time %in% df_$time]),0,1)
-  
-  # Iterate for each timestep (1 hour)
-  for (i in 1:nrow(df_)){
-    #i=12
-    # Calculate the floor temperature and indoor temperature under free floating conditions
-    df_$hp_cons_l0[i] <- 0
-    tsupply_ff <- df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
-    ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,])
-    # If the heat pump should be on, estimate the heat pump consumption and 
-    # re-estimate the floor and indoor temperatures considering the heat input.
-    if(df_$hp_status_l0[i]==1 && !is.na(tsupply_ff) && !is.na(ti_ff)){
-      df_$tsupply_l0[i] <- df_$hp_tset_l0[i]
-      df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
-      if(df_$hp_cons_l0[i]>0){
-        # df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
-        df_$ti_l0[i] <- predict(mod_ti, df_[i,])
-        # If heat pump consumption estimation is negative, then consider the indoor and 
-        # floor temperatures estimated with free floating conditions
-      } else {
-        df_$hp_cons_l0[i] <- 0
-        df_$hp_status_l0[i] <- 0
-        df_$hp_tset_l0[i] <- NA
-        df_$tsupply_l0[i] <- tsupply_ff
-        df_$ti_l0[i] <- ti_ff
-      }
-    }
-    
-    # Reassign the ti calculated values to next timesteps lagged values
-    for (l in 1:max(params[c("mod_tsupply_ar","mod_hp_cons_lags_tsupply","mod_ti_lags_dti")])){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tsupply_l",l)] <- df_$tsupply_l0[i]}}, error=function(e){next})
-    }
-    for (l in 1:max(params[c("mod_hp_cons_ar","mod_tsupply_lags_hp_cons","mod_tsupply_ar","mod_ti_lags_dti")])){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
-    }
-    for (l in 1:max(params[c("mod_ti_ar","mod_ti_lags_infiltrations")])){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}}, error=function(e){next})
-    }
-    df_inside_loop$dti[i] <- df_inside_loop$ti_l0[i] - df_inside_loop$tsupply_l0[i]
-    for (l in 1:max(c(params[c("mod_ti_lags_dti","mod_tsupply_lags_dti")]))){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dti_l",l)] <- df_$dti_l0[i]}}, error=function(e){next})
-    }
-    df_inside_loop$dte_l0[i] <- (rowMeans(data.frame(df_inside_loop$ti_l1[i],df_inside_loop$ti_l0[i])) - rowMeans(data.frame(df_inside_loop$te_l1[i],df_inside_loop$te_l0[i])))
-    df_inside_loop$infiltrations_l0[i] <- ifelse(df_inside_loop$dte_l0[i]>0,df_inside_loop$dte_l0[i],0) * df_inside_loop$windSpeed[i]
-    for (l in 1:max(c(params[c("mod_ti_lags_infiltrations")]))){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("infiltrations_l",l)] <- df_$infiltrations_l0[i]}}, error=function(e){next})
-    }
-    df_inside_loop$dtf_l0[i] <- df_inside_loop$tsupply_l0[i] - df_inside_loop$te_l0[i]
-    for (l in 1:max(c(params[c("mod_hp_cons_lags_tsupply")]))){
-      tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dtf_l",l)] <- df_$dtf_l0[i]}}, error=function(e){next})
-    }
-  }
-
-  return(df_)
-}
+# prediction_scenario_different_steps <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=NULL, hp_tset_24h, params, ts_prediction=NULL){
+#   
+#   # df <- df_original
+#   # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates[1]
+#   # hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset)
+#   
+#   df <- tune_model_input(df,params)
+#   if(!is.null(rows_to_filter) && sum(rows_to_filter,na.rm=T)>0){ 
+#     df <- df[rows_to_filter,]
+#     hp_tset_24h <- hp_tset_24h[rows_to_filter]
+#   }
+#   #df <- df[complete.cases(df),]
+#   
+#   df$date <- as.Date(df$time, tz="Europe/Berlin")
+#   
+#   if(is.null(ts_prediction)){
+#     ts_prediction_initial <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
+#   }
+#   
+#   ts_prediction <- ts_prediction_initial
+#   # ts_prediction <- format(ts_prediction,"%Y-%m-%d %H:%M:%S %Z")  
+#   # ts_prediction <- as.POSIXct(x = ts_prediction, tz = "UTC")
+#   # browser()
+#   # Simulate by sets of 24h from the ts_prediction
+#   # df <- lapply(ts_prediction,function(ts_){
+#   
+#   # Filter the initial dataset 
+#   ts_ = ts_prediction
+#   df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(12)),]
+#   df_$ts_prediction <- ts_
+#   
+#   # Assign the control variables of the scenario
+#   df_$hp_tset_l0 <- as.numeric(hp_tset_24h[df$time %in% df_$time])
+#   df_$hp_status_l0 <- ifelse(is.na(hp_tset_24h[df$time %in% df_$time]),0,1)
+#   
+#   # Iterate for each timestep (1 hour)
+#   for (i in 1:nrow(df_)){
+#     #i=12
+#     # Calculate the floor temperature and indoor temperature under free floating conditions
+#     df_$hp_cons_l0[i] <- 0
+#     tsupply_ff <- df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
+#     ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,])
+#     # If the heat pump should be on, estimate the heat pump consumption and 
+#     # re-estimate the floor and indoor temperatures considering the heat input.
+#     if(df_$hp_status_l0[i]==1 && !is.na(tsupply_ff) && !is.na(ti_ff)){
+#       df_$tsupply_l0[i] <- df_$hp_tset_l0[i]
+#       df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
+#       if(df_$hp_cons_l0[i]>0){
+#         # df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
+#         df_$ti_l0[i] <- predict(mod_ti, df_[i,])
+#         # If heat pump consumption estimation is negative, then consider the indoor and 
+#         # floor temperatures estimated with free floating conditions
+#       } else {
+#         df_$hp_cons_l0[i] <- 0
+#         df_$hp_status_l0[i] <- 0
+#         df_$hp_tset_l0[i] <- NA
+#         df_$tsupply_l0[i] <- tsupply_ff
+#         df_$ti_l0[i] <- ti_ff
+#       }
+#     }
+#     
+#     # Reassign the ti calculated values to next timesteps lagged values
+#     for (l in 1:max(params[c("mod_tsupply_ar","mod_hp_cons_lags_tsupply","mod_ti_lags_dti")])){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tsupply_l",l)] <- df_$tsupply_l0[i]}}, error=function(e){next})
+#     }
+#     for (l in 1:max(params[c("mod_hp_cons_ar","mod_tsupply_lags_hp_cons","mod_tsupply_ar","mod_ti_lags_dti")])){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_status_l",l)] <- df_$hp_status_l0[i]}}, error=function(e){next})
+#     }
+#     for (l in 1:max(params[c("mod_ti_ar","mod_ti_lags_infiltrations")])){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("ti_l",l)] <- df_$ti_l0[i]}}, error=function(e){next})
+#     }
+#     df_inside_loop$dti[i] <- df_inside_loop$ti_l0[i] - df_inside_loop$tsupply_l0[i]
+#     for (l in 1:max(c(params[c("mod_ti_lags_dti","mod_tsupply_lags_dti")]))){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dti_l",l)] <- df_$dti_l0[i]}}, error=function(e){next})
+#     }
+#     df_inside_loop$dte_l0[i] <- (rowMeans(data.frame(df_inside_loop$ti_l1[i],df_inside_loop$ti_l0[i])) - rowMeans(data.frame(df_inside_loop$te_l1[i],df_inside_loop$te_l0[i])))
+#     df_inside_loop$infiltrations_l0[i] <- ifelse(df_inside_loop$dte_l0[i]>0,df_inside_loop$dte_l0[i],0) * df_inside_loop$windSpeed[i]
+#     for (l in 1:max(c(params[c("mod_ti_lags_infiltrations")]))){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("infiltrations_l",l)] <- df_$infiltrations_l0[i]}}, error=function(e){next})
+#     }
+#     df_inside_loop$dtf_l0[i] <- df_inside_loop$tsupply_l0[i] - df_inside_loop$te_l0[i]
+#     for (l in 1:max(c(params[c("mod_hp_cons_lags_tsupply")]))){
+#       tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("dtf_l",l)] <- df_$dtf_l0[i]}}, error=function(e){next})
+#     }
+#   }
+#   
+#   return(df_)
+# }
 
 ###
 # Genetic Algorithm
@@ -1697,70 +1701,70 @@ rmserr <- function (x, y, summary = FALSE){
 
 optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_feature, min_per_feature, 
                                        max_per_feature, names_per_feature, df, train_dates, val_dates){
-    #X=sample(c(0,1),nBits,replace=T)
-
-    params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, min_per_feature = min_per_feature, 
-                                 max_per_feature = max_per_feature)
-    names(params) <- names_per_feature
-    
-    # Training of the models
-    tryCatch({
-      mod_q <- calculate_model_q(params, df, train_dates, output="model")$mod
-      mod_tsupply <- calculate_model_tsupply(params, df, train_dates, output="model")$mod
-      mod_ti <- calculate_model_ti(params, df, train_dates, output="model")$mod
-    },error=function(e){return(-1000)})
-    
-    # Validation of the models in 24h predictions
-    predv <- prediction_scenario(
-      mod_q = mod_q, 
-      mod_ti = mod_ti,
-      mod_tsupply = mod_tsupply,
-      df = df,
-      rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
-      hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
-      params = params,
-      ts_prediction = NULL
-    )
-    
-    # Accuracy indoor temperature and consumption
-    q_diff <- rmserr(predv$hp_cons[is.finite(predv$hp_cons) & predv$hp_cons>0],
-                             predv$hp_cons_l0[is.finite(predv$hp_cons) & predv$hp_cons>0])$rmse
-    ti_diff <- rmserr(predv$ti[is.finite(predv$ti)],predv$ti_l0[is.finite(predv$ti)])$rmse
-    tsupply_diff <- rmserr(predv$tsupply[is.finite(predv$tsupply)],predv$tsupply_l0[is.finite(predv$tsupply)])$rmse
-    
-    # # Autocorrelations
-    a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = F)
-    inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = F)
-    inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,plot = T)
-    inc_tsupply <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    #
-    # # Impulse responses
-    # mod_ti_te <- sum(abs(plot_irf(mod_ti$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
-    # mod_ti_value <- sum(plot_irf(mod_ti$coefficients,24,"^value_l",plot = F,exhogenous_coeff = T)$value<(-0.05))
-    # mod_q_dte  <- sum(abs(plot_irf(mod_q$coefficients,24,"^dte_l",plot = F,exhogenous_coeff = T)$value)>10)
-    # mod_q_dti <- sum(abs(plot_irf(mod_q$coefficients,24,"^dti_l",plot = F,exhogenous_coeff = T)$value)>10)
-    # mod_q_te <- sum(abs(plot_irf(mod_q$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
-    
-    # Percentage pvalue < 0.05 to all variables
-    pval_q <- 1-(sum(summary(mod_q)$coef[,4]<=0.05) / nrow(summary(mod_q)$coef))
-    pval_ti <- 1-(sum(summary(mod_ti)$coef[,4]<=0.05) / nrow(summary(mod_ti)$coef))
-    pval_tsupply <- 1-(sum(summary(mod_tsupply)$coef[,4]<=0.05) / nrow(summary(mod_tsupply)$coef))
-    
-    score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
-      -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
-      q_diff*inc_q*(1+params["mod_hp_cons_ar"]*0.1) + 
-      tsupply_diff*inc_tsupply*2*(1+params["mod_tsupply_ar"]*0.1) ) * (
-        mean(pval_q,pval_ti,pval_tsupply)
-      )
-    if (is.finite(score)){
-      return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
-    } else {return(-10000000000000)}
+  #X=sample(c(0,1),nBits,replace=T)
+  
+  params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, min_per_feature = min_per_feature, 
+                               max_per_feature = max_per_feature)
+  names(params) <- names_per_feature
+  
+  # Training of the models
+  tryCatch({
+    mod_q <- calculate_model_q(params, df, train_dates, output="model")$mod
+    mod_tsupply <- calculate_model_tsupply(params, df, train_dates, output="model")$mod
+    mod_ti <- calculate_model_ti(params, df, train_dates, output="model")$mod
+  },error=function(e){return(-1000)})
+  
+  # Validation of the models in 24h predictions
+  predv <- prediction_scenario(
+    mod_q = mod_q, 
+    mod_ti = mod_ti,
+    mod_tsupply = mod_tsupply,
+    df = df,
+    rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
+    hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
+    params = params,
+    ts_prediction = NULL
+  )
+  
+  # Accuracy indoor temperature and consumption
+  q_diff <- rmserr(predv$hp_cons[is.finite(predv$hp_cons) & predv$hp_cons>0],
+                   predv$hp_cons_l0[is.finite(predv$hp_cons) & predv$hp_cons>0])$rmse
+  ti_diff <- rmserr(predv$ti[is.finite(predv$ti)],predv$ti_l0[is.finite(predv$ti)])$rmse
+  tsupply_diff <- rmserr(predv$tsupply[is.finite(predv$tsupply)],predv$tsupply_l0[is.finite(predv$tsupply)])$rmse
+  
+  # # Autocorrelations
+  a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = F)
+  inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+  a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = F)
+  inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+  a <- acf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,plot = T)
+  inc_tsupply <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
+  #
+  # # Impulse responses
+  # mod_ti_te <- sum(abs(plot_irf(mod_ti$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
+  # mod_ti_value <- sum(plot_irf(mod_ti$coefficients,24,"^value_l",plot = F,exhogenous_coeff = T)$value<(-0.05))
+  # mod_q_dte  <- sum(abs(plot_irf(mod_q$coefficients,24,"^dte_l",plot = F,exhogenous_coeff = T)$value)>10)
+  # mod_q_dti <- sum(abs(plot_irf(mod_q$coefficients,24,"^dti_l",plot = F,exhogenous_coeff = T)$value)>10)
+  # mod_q_te <- sum(abs(plot_irf(mod_q$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
+  
+  # Percentage pvalue < 0.05 to all variables
+  pval_q <- 1-(sum(summary(mod_q)$coef[,4]<=0.05) / nrow(summary(mod_q)$coef))
+  pval_ti <- 1-(sum(summary(mod_ti)$coef[,4]<=0.05) / nrow(summary(mod_ti)$coef))
+  pval_tsupply <- 1-(sum(summary(mod_tsupply)$coef[,4]<=0.05) / nrow(summary(mod_tsupply)$coef))
+  
+  score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
+    -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
+        q_diff*inc_q*(1+params["mod_hp_cons_ar"]*0.1) + 
+        tsupply_diff*inc_tsupply*2*(1+params["mod_tsupply_ar"]*0.1) ) * (
+          mean(pval_q,pval_ti,pval_tsupply)
+        )
+  if (is.finite(score)){
+    return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
+  } else {return(-10000000000000)}
 }
 
 optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, df_price, time_to_predict, params){
+                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params){
   
   #X=sample(c(0,1),nBits,replace=T)
   
@@ -1768,7 +1772,10 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
   params_hp_tset_24h <- as.numeric(params_hp_tset_24h)
   # names(params_hp_tset_24h) <- names_per_feature
   
-  rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
+  # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
+  # time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(23), by = "hours")
+  time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(11), by = "hours")
+  rows_to_filter = df$time %in% time_to_predict_24h
   hp_tset_24h = numeric(nrow(df))
   hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
   
@@ -1783,6 +1790,10 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     params = params,
     ts_prediction = NULL
   )
+  #Export predv to the global environment
+  # assign("SOL_", predv, envir = .GlobalEnv)
+  SOL_ <<- predv
+  
   
   # Simetrical penalty is proposed (same penalty if the temperature bound in violated over or under)
   delta <- pmin((predv$ti_l0 - ti_min), (ti_max - predv$ti_l0))
@@ -1792,8 +1803,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
   if (any(delta!=0)) {
     # Exponential parameter lambda
     lambda <- 2
-    # Maximum delta allowed for each hour 
-    delta_limit <- 3
+
     # (Both parameters should be hardcoded outside, during trial session are going to stay here)
     
     # The soft restrictions have been implemented in two ways:
@@ -1807,25 +1817,129 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     #   score = 5000000
     #   return(-score)
     # }
-
+    
     # 2) Exponential growth of penalty with homographic function to include the asymptote in the delta_limit
-    delta_penalty <- penalty_function(delta, delta_limit = 1.2, lamda)
+    delta_penalty <- {}
+    for (i in 1:length(delta)) {
+      if (delta[i] != 0) {
+        delta_penalty[i] <- penalty_function(delta[i], delta_limit = 1.2, lambda)
+      }else{
+        delta_penalty[i] <- 0
+      }
+    }
+    
     delta_penalty[delta_penalty<0] <- 500000
+    
     
     # 3) Linear growth of penalty
     # delta_penalty <- 
     # 
     penalty <- sum(delta_penalty)
+  }else{
+    penalty <- 0
   }
   
   # Cost function: sum over 24 hours
-  # check units (in price is euro/MWh and consumption Wh)??
-  score <- sum(df_price$price*predv$hp_cons_l0) + penalty
-
+  score <- sum((price/1000000)*predv$hp_cons_l0) + penalty
+  
   return(-score)
 }
 
+post_optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
+                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params){
+  
+  #X=sample(c(0,1),nBits,replace=T)
+  
+  params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
+  params_hp_tset_24h <- as.numeric(params_hp_tset_24h)
+  # names(params_hp_tset_24h) <- names_per_feature
+  
+  # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
+  # time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(23), by = "hours")
+  time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(11), by = "hours")
+  rows_to_filter = df$time %in% time_to_predict_24h
+  hp_tset_24h = numeric(nrow(df))
+  hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
+  
+  # the predicted variables will be tagged as "_0" 
+  predv <- prediction_scenario(
+    mod_q = mod_q, 
+    mod_ti = mod_ti,
+    mod_tsupply = mod_tsupply,
+    df = df,
+    rows_to_filter = rows_to_filter,
+    hp_tset_24h = hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
+    params = params,
+    ts_prediction = NULL
+  )
+  #Export predv to the global environment
+  # assign("SOL_", predv, envir = .GlobalEnv)
+  SOL_ <<- predv
+  
+  
+  # Simetrical penalty is proposed (same penalty if the temperature bound in violated over or under)
+  delta <- pmin((predv$ti_l0 - ti_min), (ti_max - predv$ti_l0))
+  delta[delta>0] <- 0
+  delta <- abs(delta)
+  
+  if (any(delta!=0)) {
+    # Exponential parameter lambda
+    lambda <- 2
+    # (Both parameters should be hardcoded outside, during trial session are going to stay here)
+    
+    # The soft restrictions have been implemented in two ways:
+    # 1) Exponential growth of penalty 
+    # 
+    # exp_delta <- exp(lambda*delta)
+    # penalty <- sum(exp_delta[exp_delta>1])
+    # 
+    # 
+    # if (any(delta > delta_limit)){
+    #   score = 5000000
+    #   return(-score)
+    # }
+    
+    # 2) Exponential growth of penalty with homographic function to include the asymptote in the delta_limit
+    delta_penalty <- {}
+    for (i in 1:length(delta)) {
+      if (delta[i] != 0) {
+        delta_penalty[i] <- penalty_function(delta[i], delta_limit = 1.2, lambda)
+      }else{
+        delta_penalty[i] <- 0
+      }
+    }
+    
+    delta_penalty[delta_penalty<0] <- 500000
+    
+    
+    # 3) Linear growth of penalty
+    # delta_penalty <- 
+    # 
+    penalty <- sum(delta_penalty)
+  }else{
+    penalty <- 0
+  }
+  
+  # Cost function: sum over 24 hours
+  score <- sum((price/1000000)*predv$hp_cons_l0) + penalty
+  
+  pricee <- sum((price/1000000)*predv$hp_cons_l0)
+  RETURN <- data.frame("predv" = predv,
+                       "penalty" = penalty,
+                       "pricee" = pricee
+                       )
+    # return(predv)
+  return(RETURN)
+}
+
+
+
 penalty_function <- function(x, delta_limit, lambda){
-  y = -exp(x)/(x-delta_limit)
+  if (x == delta_limit) {
+    y <- -1
+  }else {
+    y = -exp(lambda*x)/(x-delta_limit)
+  }
   return(y)
 }
+
