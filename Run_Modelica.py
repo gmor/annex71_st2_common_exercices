@@ -16,8 +16,8 @@ def simulate_with_input():
     os.chdir(path="C:/Users/gerar/PycharmProjects/untitled1/venv/Scripts")
     fmuf = 'TwinHouses71_new.fmu'
     start_time = 30463200
-    stop_time = 31676400
-    step_size = 3600
+    # stop_time = 31676400
+    # step_size = 3600
     #dump(fmuf)
     model_description = read_model_description(fmuf)
     vrs = {}
@@ -44,8 +44,8 @@ def simulate_with_input():
 
 # fmu, vr_input1, vr_input2, vr_output1, vr_output2 = simulate_with_input()
 
-def Iteration(fmu, vr_input1, vr_input2, vr_output1, vr_output2, time, Tsup, HPs):
-    step_size = 3600
+def Iteration(fmu, vr_input1, vr_input2, vr_output1, vr_output2, time, step_size, Tsup, HPs):
+    # step_size = 3600
     fmu.setReal([vr_input1], [HPs]) #k
     fmu.setReal([vr_input2], [Tsup]) #z
 
