@@ -219,7 +219,7 @@ tune_model_input_fdd <- function(df,params){
 
 
 fs <- function(X, nharmonics, pair_function=T) {
-  do.call("c", lapply(1:nharmonics, function(i) {
+  out <- as.list(do.call(c, lapply(1:nharmonics, function(i) {
     if(pair_function==T){
       val <- list(sin(i * X * 2 * pi), cos(i * X * 2 * pi))
       names(val) <- paste0(c("sin_", "cos_"), i)
@@ -229,7 +229,8 @@ fs <- function(X, nharmonics, pair_function=T) {
       names(val) <- paste0(c("sin_"), i)
       return(val)
     }
-  }))
+  })))
+  return(do.call(cbind,out))
 }
 
 add_fourier_series_sunazimuth <- function(df, sunAzimuth_nharmonics, min_solarElevation=10) {
@@ -700,35 +701,41 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
   
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <-  as.formula(sprintf("ti_l0 ~ 
-                                 0 + %s + %s + %s + %s",
-                                 paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),
-                                 paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},0:params["mod_ti_lags_dti"]),collapse=" + "),
-                                 #paste0("tsupply_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
-                                 paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
-                                 paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + ")
-                                 #paste0("vent_l",0:(params["mod_ti_lags_ventilation"]),"",collapse=" + ")
+                                 0 + %s",
+                                 paste(
+                                   paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),#paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),
+                                   #paste0(mapply(function(x){sprintf("(ti_l%s-te_l%s)",x,x)},1:params["mod_ti_ar2"]),collapse=" + "), #"bs(ti_l%s-te_l%s, degree=2)"
+                                   # paste0(mapply(function(x){sprintf("bs(ti_l%s,degree=2)",x)},1:params["mod_ti_ar2"]),collapse=" + "),
+                                   paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},0:params["mod_ti_lags_dti"]),collapse=" + "),
+                                   #paste0("tsupply_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
+                                   paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
+                                   paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + "),
+                                   paste0("BHI_l",1:(params["mod_ti_lags_BHI"]),":fs(sunAz/360,2)",collapse=" + "),
+                                   #paste0("vent_l",0:(params["mod_ti_lags_ventilation"]),"",collapse=" + "),
+                                   sep=" + "
+                                 )
   ))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
-  if(params["mod_ti_solar_gains"]==1){
-    formula <- update.formula(formula,paste0(". ~ . +",paste0("BHI_l",0:params["mod_ti_lags_BHI"],"",collapse=" + ")))
-  } else if (params["mod_ti_solar_gains"]==2){
-    for (i in 0:params["mod_ti_lags_BHI"]){
-      sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
-      solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("BHI_l",i,":",x)})
-      formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
-    }
-  }
-  # Define the windBearing fourier series terms and add the infiltration terms to the formula
-  if(params["mod_ti_infiltrations"]==1){
-    formula <- update.formula(formula,paste0(". ~ . +",paste0("infiltrations_l",0:params["mod_ti_lags_infiltrations"],"",collapse=" + ")))
-  } else if (params["mod_ti_infiltrations"]==2){
-    for (i in 0:params["mod_ti_lags_infiltrations"]){#(params[3]-1)){#0){#
-      windBearing_fs_terms <- colnames(df)[grepl(paste0("^windBearing_fs_l",i),colnames(df))]
-      infiltrations_features <- lapply(windBearing_fs_terms,function(x){paste0("infiltrations_l",i,":",x)})
-      formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(infiltrations_features,collapse=" + "))))
-    }
-  }
+  # if(params["mod_ti_solar_gains"]==1){
+  #   formula <- update.formula(formula,paste0(". ~ . +",paste0("BHI_l",0:params["mod_ti_lags_BHI"],"",collapse=" + ")))
+  # } else if (params["mod_ti_solar_gains"]==2){
+  #   for (i in 0:params["mod_ti_lags_BHI"]){
+  #     sunAzimuth_fs_terms <- colnames(df)[grepl(paste0("^sunAzimuth_fs_l",i),colnames(df))]
+  #     solar_features <- lapply(sunAzimuth_fs_terms,function(x){paste0("BHI_l",i,":",x)})
+  #     formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(solar_features,collapse=" + "))))
+  #   }
+  # }
+  # # Define the windBearing fourier series terms and add the infiltration terms to the formula
+  # if(params["mod_ti_infiltrations"]==1){
+  #   formula <- update.formula(formula,paste0(". ~ . +",paste0("infiltrations_l",0:params["mod_ti_lags_infiltrations"],"",collapse=" + ")))
+  # } else if (params["mod_ti_infiltrations"]==2){
+  #   for (i in 0:params["mod_ti_lags_infiltrations"]){#(params[3]-1)){#0){#
+  #     windBearing_fs_terms <- colnames(df)[grepl(paste0("^windBearing_fs_l",i),colnames(df))]
+  #     infiltrations_features <- lapply(windBearing_fs_terms,function(x){paste0("infiltrations_l",i,":",x)})
+  #     formula <- update.formula(formula,paste0(". ~ . + ",do.call(paste,list(infiltrations_features,collapse=" + "))))
+  #   }
+  # }
   
   mod <- lm(formula, data=df)
   
@@ -755,19 +762,21 @@ calculate_model_q <- function(params, df, train_dates, output="aic"){
   
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("hp_cons_l0 ~ 
-      1 + %s + %s + %s",
-                                paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
-                                paste0(mapply(function(x){sprintf("bs(tsupply_l%s):bs(ti_l%s)",x,x)},1:1),collapse=" + "),
-                                paste0("te_raw_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + ")
-                                # paste0(mapply(function(x){sprintf("hp_cons_l%s:humidity_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
-                                # paste0(mapply(function(x){sprintf("hp_cons_l%s:te_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
-                                # paste0("hp_cons_l",1:params["mod_hp_cons_ar"],"",collapse=" + "),
-                                # paste0("te_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + "),
-                                # paste0("bs(dtf_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
-                                # paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
-                                # #paste0("ti_l",0:params["lags_dti"],"",collapse=" + "),
-                                # paste0("humidity_l",0:params["mod_hp_cons_lags_humidity"],"",collapse=" + ")
-                                #paste0(mapply(function(x){sprintf("bs(te_l%s,knots=1,degree=2):bs(humidity_l%s,knots=1,degree=2)",x,x)},0:max(params[c("mod_hp_cons_lags_te","mod_hp_cons_lags_humidity")])),collapse=" + ")
+      1 + %s",
+        paste(
+          paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
+          #paste0(mapply(function(x){sprintf("bs(tsupply_l%s):bs(ti_l%s)",x,x)},1:1),collapse=" + "),
+          paste0("te_raw_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + "),
+          # paste0(mapply(function(x){sprintf("hp_cons_l%s:humidity_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
+          # paste0(mapply(function(x){sprintf("hp_cons_l%s:te_l%s",x,x)},1:params["mod_hp_cons_ar"]),collapse=" + "),
+          paste0("hp_cons_l",1:params["mod_hp_cons_ar"],"",collapse=" + "),
+          # paste0("te_l",0:params["mod_hp_cons_lags_te"],"",collapse=" + "),
+          # paste0("bs(dtf_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
+          # paste0("bs(tsupply_l",0:params["mod_hp_cons_lags_tsupply"],")",collapse=" + "),
+          paste0("ti_l",1:params["mod_hp_cons_lags_ti"],"",collapse=" + "),
+          # paste0("humidity_l",0:params["mod_hp_cons_lags_humidity"],"",collapse=" + ")
+          #paste0(mapply(function(x){sprintf("bs(te_l%s,knots=1,degree=2):bs(humidity_l%s,knots=1,degree=2)",x,x)},0:max(params[c("mod_hp_cons_lags_te","mod_hp_cons_lags_humidity")])),collapse=" + ")
+        sep=" + ")
   ))
   
   mod <- lm(formula, data=df[df$hp_status>0,])
@@ -794,14 +803,17 @@ calculate_model_tsupply <- function(params, df, train_dates, output="aic"){
   
   # Formula definition. Base formula + GHI and windSpeed terms
   formula <- as.formula(sprintf("tsupply_l0 ~ 
-      0 + %s + %s",
-                                # paste0(mapply(function(x){sprintf("bs(tsupply_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
-                                paste0(mapply(function(x){sprintf("bs(tsupply_l%s)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
-                                paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tsupply_lags_hp_cons"]),collapse=" + ")
-                                #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
-                                #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
-                                #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
-                                #paste0("ti_l",1:max(1,params["lags_ti"]),"",collapse=" + ")
+      0 + %s",
+      paste(
+        # paste0(mapply(function(x){sprintf("bs(tsupply_l%s,degree=2)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
+        paste0(mapply(function(x){sprintf("bs(tsupply_l%s)*as.factor(hp_status_l%s)",x,x-1)},1:params["mod_tsupply_ar"]),collapse=" + "),
+        paste0(mapply(function(x){sprintf("hp_cons_l%s*te_raw_l%s",x,x)},0:params["mod_tsupply_lags_hp_cons"]),collapse=" + "),
+        #paste0("te_l",0:params["lags_te"],"",collapse=" + "),
+        #paste0("humidity_l",0:params["lags_humidity"],"",collapse=" + "),
+        #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
+                    #paste0("ti_l",1:max(1,params["lags_ti"]),"",collapse=" + ")
+        sep=" + "
+      )
   ))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
@@ -1370,11 +1382,11 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
   df$date <- as.Date(df$time, tz="Europe/Berlin")
 
   # # CHANGED HERE:
-  # if(is.null(ts_prediction)){
-  #   ts_prediction <- smartAgg(df,"date",function(x){min(x,na.rm=T)},"time",catN = F)$time
-  # }
+  if(is.null(ts_prediction)){
+    ts_prediction <- smartAgg(df,"date",function(x){x[sample(1:length(x),1)]},"time",catN = F)$time #min(x,na.rm=T)
+  }
   
-  ts_prediction <- df$time[1]
+  # ts_prediction <- df$time[1]
   
   # Simulate by sets of 24h from the ts_prediction
   df <- lapply(ts_prediction,function(ts_){
@@ -1764,7 +1776,7 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
 }
 
 optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params){
+                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params, post_analysis = F){
   
   #X=sample(c(0,1),nBits,replace=T)
   
@@ -1788,13 +1800,9 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     rows_to_filter = rows_to_filter,
     hp_tset_24h = hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
     params = params,
-    ts_prediction = NULL
+    ts_prediction = time_to_predict #min(df$time)
   )
-  #Export predv to the global environment
-  # assign("SOL_", predv, envir = .GlobalEnv)
-  SOL_ <<- predv
-  
-  
+
   # Simetrical penalty is proposed (same penalty if the temperature bound in violated over or under)
   delta <- pmin((predv$ti_l0 - ti_min), (ti_max - predv$ti_l0))
   delta[delta>0] <- 0
@@ -1802,7 +1810,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
   
   if (any(delta!=0)) {
     # Exponential parameter lambda
-    lambda <- 2
+    lambda <- 0.90 #0.75 #0.7 #0.6 #0.2 #0.25 #0.35 #2
 
     # (Both parameters should be hardcoded outside, during trial session are going to stay here)
     
@@ -1822,7 +1830,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     delta_penalty <- {}
     for (i in 1:length(delta)) {
       if (delta[i] != 0) {
-        delta_penalty[i] <- penalty_function(delta[i], delta_limit = 1.2, lambda)
+        delta_penalty[i] <- penalty_function(delta[i], delta_limit = 4, lambda)
       }else{
         delta_penalty[i] <- 0
       }
@@ -1835,110 +1843,31 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     # delta_penalty <- 
     # 
     penalty <- sum(delta_penalty)
-  }else{
+  } else {
     penalty <- 0
   }
   
   # Cost function: sum over 24 hours
-  score <- sum((price/1000000)*predv$hp_cons_l0) + penalty
+  iteration_price <- sum((price/1000000)*predv$hp_cons_l0)
+  score <- sum(iteration_price) + penalty
+  #Arash score <- sum(iteration_price) + 0.030*(sum(delta))
   
-  return(-score)
-}
-
-post_optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params){
-  
-  #X=sample(c(0,1),nBits,replace=T)
-  
-  params_hp_tset_24h <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, levels_per_feature = levels_per_feature)
-  params_hp_tset_24h <- as.numeric(params_hp_tset_24h)
-  # names(params_hp_tset_24h) <- names_per_feature
-  
-  # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
-  # time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(23), by = "hours")
-  time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(11), by = "hours")
-  rows_to_filter = df$time %in% time_to_predict_24h
-  hp_tset_24h = numeric(nrow(df))
-  hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
-  
-  # the predicted variables will be tagged as "_0" 
-  predv <- prediction_scenario(
-    mod_q = mod_q, 
-    mod_ti = mod_ti,
-    mod_tsupply = mod_tsupply,
-    df = df,
-    rows_to_filter = rows_to_filter,
-    hp_tset_24h = hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
-    params = params,
-    ts_prediction = NULL
-  )
-  #Export predv to the global environment
-  # assign("SOL_", predv, envir = .GlobalEnv)
-  SOL_ <<- predv
-  
-  
-  # Simetrical penalty is proposed (same penalty if the temperature bound in violated over or under)
-  delta <- pmin((predv$ti_l0 - ti_min), (ti_max - predv$ti_l0))
-  delta[delta>0] <- 0
-  delta <- abs(delta)
-  
-  if (any(delta!=0)) {
-    # Exponential parameter lambda
-    lambda <- 2
-    # (Both parameters should be hardcoded outside, during trial session are going to stay here)
-    
-    # The soft restrictions have been implemented in two ways:
-    # 1) Exponential growth of penalty 
-    # 
-    # exp_delta <- exp(lambda*delta)
-    # penalty <- sum(exp_delta[exp_delta>1])
-    # 
-    # 
-    # if (any(delta > delta_limit)){
-    #   score = 5000000
-    #   return(-score)
-    # }
-    
-    # 2) Exponential growth of penalty with homographic function to include the asymptote in the delta_limit
-    delta_penalty <- {}
-    for (i in 1:length(delta)) {
-      if (delta[i] != 0) {
-        delta_penalty[i] <- penalty_function(delta[i], delta_limit = 1.2, lambda)
-      }else{
-        delta_penalty[i] <- 0
-      }
-    }
-    
-    delta_penalty[delta_penalty<0] <- 500000
-    
-    
-    # 3) Linear growth of penalty
-    # delta_penalty <- 
-    # 
-    penalty <- sum(delta_penalty)
-  }else{
-    penalty <- 0
+  if(post_analysis==T){
+    return(data.frame("predv" = predv,
+                      "penalty" = penalty,
+                      "iteration_price" = iteration_price
+    ))
+  } else {
+    return(-score)
   }
   
-  # Cost function: sum over 24 hours
-  score <- sum((price/1000000)*predv$hp_cons_l0) + penalty
-  
-  pricee <- sum((price/1000000)*predv$hp_cons_l0)
-  RETURN <- data.frame("predv" = predv,
-                       "penalty" = penalty,
-                       "pricee" = pricee
-                       )
-    # return(predv)
-  return(RETURN)
 }
-
-
 
 penalty_function <- function(x, delta_limit, lambda){
   if (x == delta_limit) {
     y <- -1
   }else {
-    y = -exp(lambda*x)/(x-delta_limit)
+    y = (-exp(lambda*x)/(x-delta_limit))-(1/delta_limit)
   }
   return(y)
 }
