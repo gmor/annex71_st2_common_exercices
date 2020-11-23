@@ -38,7 +38,7 @@ library(reticulate)
 
 #Extract form the Excel file the inputs to send to Modelica 
 # BM <- read_excel_allsheets("data/hystersis.xlsx")$Sheet1
-BM <- read_excel_allsheets("data/hystersis2.5.xlsx")$Sheet1 #Last version of the setpoints form Matlab
+BM <- read_excel_allsheets("data/hystersis2.xlsx")$Sheet1 #Last version of the setpoints form Matlab
 
 # The output should be the prediction of the optimum heat pump's status (ON/OFF) and set point temperature 
 # for the next 24 hours (both parameters are saved in the vector: params_hp_tset_24h). 

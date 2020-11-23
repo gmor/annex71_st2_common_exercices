@@ -1001,7 +1001,7 @@ ggplot() + geom_line(aes(df$time,df$te)) +
 ######################################################### Export Data to Matlab ###############################################
 
 #Export R2 data
-writeMat("Results_send_Arash/R2_data.mat",
+writeMat("Results_in_matlab/R2_data.mat",
          #Results in validation dates data frame 1
          ti_df = ti_df,
          ti_l0_df = ti_l0_df,
@@ -1024,7 +1024,7 @@ writeMat("Results_send_Arash/R2_data.mat",
 time_to_predict_step_20s <- as.character(df_disconfort_20s$time_to_predict_step)
 time_to_predict_step_1h <- as.character(df_disconfort$time_to_predict_step)
 
-writeMat("Results_send_Arash/MPC_data.mat", #Need:time(real), time modelica, Tin, hp_el, electric price in intervals of 20s and hourly
+writeMat("Results_in_matlab/MPC_data.mat", #Need:time(real), time modelica, Tin, hp_el, electric price in intervals of 20s and hourly
          time_to_predict_step_20s = time_to_predict_step_20s,
          time_to_predict_step_1h = time_to_predict_step_1h,
          time_20s = df_disconfort_20s$time,
