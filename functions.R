@@ -84,7 +84,7 @@ tune_model_input <- function(df,params){
     df[,paste0("dtf_l",l)] <- dplyr::lag(df[,"dtf"],l)
   }
   df$dti <- df$tsupply - df$ti
-  for (l in 0:max(c(1,params[c("mod_ti_ar","mod_ti_lags_dti","mod_ti_lags_infiltrations")]))){
+  for (l in 0:max(c(1,params[c("mod_ti_ar","mod_ti_lags_dti","mod_ti_lags_infiltrations","mod_hp_cons_lags_ti")]))){
     df[,paste0("ti_l",l)] <- dplyr::lag(df[,"ti"],l)
   }
   for (l in 0:max(c(params[c("mod_ti_lags_dti","mod_tsupply_lags_dti")]))){
@@ -706,7 +706,7 @@ calculate_model_ti <- function(params, df, train_dates, output="aic"){
                                    paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),#paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),
                                    #paste0(mapply(function(x){sprintf("(ti_l%s-te_l%s)",x,x)},1:params["mod_ti_ar2"]),collapse=" + "), #"bs(ti_l%s-te_l%s, degree=2)"
                                    # paste0(mapply(function(x){sprintf("bs(ti_l%s,degree=2)",x)},1:params["mod_ti_ar2"]),collapse=" + "),
-                                   paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},0:params["mod_ti_lags_dti"]),collapse=" + "),
+                                   paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},1:params["mod_ti_lags_dti"]),collapse=" + "),
                                    #paste0("tsupply_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
                                    paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
                                    paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + "),
@@ -1766,10 +1766,10 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
   
   score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
     -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
-        q_diff*inc_q*(1+params["mod_hp_cons_ar"]*0.1) + 
-        tsupply_diff*inc_tsupply*2*(1+params["mod_tsupply_ar"]*0.1) ) * (
-          mean(pval_q,pval_ti,pval_tsupply)
-        )
+        q_diff*inc_q*4*(1+params["mod_hp_cons_ar"]*0.1) + 
+        tsupply_diff*inc_tsupply*6*(1+params["mod_tsupply_ar"]*0.1) )# * (
+          #(sum(pval_q,pval_ti,pval_tsupply)/3) #mean(pval_q,pval_ti,pval_tsupply)   )
+  
   if (is.finite(score)){
     return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
   } else {return(-10000000000000)}

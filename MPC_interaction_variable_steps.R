@@ -4,7 +4,7 @@
 # r0753014
 # MPCsubex1
 
-setwd("~/annex71_st2_common_exercices")
+setwd("~/GitHub/annex71_st2_common_exercices")
 source("functions.R")
 
 # Libraries for mathematics
@@ -105,35 +105,35 @@ eligible_dates <- all_dates[2:length(all_dates)]
 # train_dates <- eligible_dates[1:floor(length(eligible_dates)*0.75)]
 # val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
 
-#train_dates <- eligible_dates[eligible_dates>as.POSIXct(x = "2019-01-02 23:00:00 UTC", tz = "UTC")] #Excluiding the test dates
-train_dates <- sample(eligible_dates,round(length(eligible_dates)*0.8,0),replace = F)
+# train_dates <- eligible_dates[eligible_dates>as.POSIXct(x = "2019-01-02 23:00:00 UTC", tz = "UTC")] #Excluiding the test dates
+train_dates <- sample(eligible_dates,round(length(eligible_dates)*0.75,0),replace = F)
 val_dates <- eligible_dates[!(eligible_dates %in% train_dates)] #Same as testing dates
-
+plot(train_dates,rep(1,length(train_dates)))
 
 # Optimize the alpha values of the low pass filters
 features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "alpha_BHI"=list(min=0,max=0,n=0,class="float"),
                  "alpha_GHI"=list(min=0,max=0,n=0,class="float"),
                  "alpha_ws"=list(min=0,max=0.9,n=15,class="float"),
-                 "mod_hp_cons_ar"=list(min=1,max=4,n=3,class="int"),
-                 "mod_hp_cons_lags_tsupply"=list(min=0,max=3,n=3,class="int"),
-                 "mod_hp_cons_lags_te"=list(min=0,max=3,n=3,class="int"),#2,2
+                 "mod_hp_cons_ar"=list(min=1,max=3,n=2,class="int"),
+                 "mod_hp_cons_lags_tsupply"=list(min=0,max=1,n=1,class="int"),
+                 "mod_hp_cons_lags_te"=list(min=1,max=3,n=2,class="int"),#2,2
                  "mod_hp_cons_lags_humidity"=list(min=0,max=0,n=0,class="int"),
-                 "mod_hp_cons_lags_ti"=list(min=1,max=4,n=3,class="int"),
-                 "mod_tsupply_ar"=list(min=1,max=5,n=4,class="int"),
+                 "mod_hp_cons_lags_ti"=list(min=1,max=2,n=1,class="int"),
+                 "mod_tsupply_ar"=list(min=1,max=4,n=3,class="int"),
                  "mod_tsupply_lags_hp_cons"=list(min=0,max=4,n=4,class="int"),#"mod_tsupply_lags_hp_cons"=list(min=0,max=3,n=3,class="int"),
                  "mod_tsupply_lags_dti"=list(min=0,max=0,n=0,class="int"),
-                 "mod_ti_ar"=list(min=3,max=5,n=2,class="int"),#"mod_ti_ar"=list(min=1,max=9,n=8,class="int"), #5,3
-                 "mod_ti_ar2"=list(min=1,max=2,n=1,class="int"),#
-                 "mod_ti_lags_te"=list(min=2,max=2,n=0,class="int"),
-                 "mod_ti_lags_diff"=list(min=0,max=0,n=0,class="int"),
-                 "mod_ti_lags_dti"=list(min=1,max=5,n=4,class="int"),#"mod_ti_lags_dti"=list(min=2,max=9,n=7,class="int"),
+                 "mod_ti_ar"=list(min=3,max=7,n=4,class="int"),#"mod_ti_ar"=list(min=1,max=9,n=8,class="int"), #5,3
+                 "mod_ti_ar2"=list(min=0,max=0,n=0,class="int"),#
+                 "mod_ti_lags_te"=list(min=2,max=4,n=2,class="int"),
+                 "mod_ti_lags_diff"=list(min=0,max=1,n=1,class="int"),
+                 "mod_ti_lags_dti"=list(min=1,max=6,n=5,class="int"),#"mod_ti_lags_dti"=list(min=2,max=9,n=7,class="int"),
                  "mod_ti_lags_GHI"=list(min=0,max=0,n=0,class="int"),
                  "mod_ti_lags_BHI"=list(min=1,max=3,n=2,class="int"),
                  "mod_ti_lags_infiltrations"=list(min=0,max=2,n=2,class="int"),
                  "mod_ti_lags_humidity"=list(min=0,max=0,n=0,class="int"),
                  "mod_ti_lags_ventilation"=list(min=0,max=1,n=1,class="int"),
-                 "mod_ti_lags_hg"=list(min=0,max=5,n=5,class="int"),#"mod_ti_lags_hg"=list(min=0,max=7,n=7,class="int"),
+                 "mod_ti_lags_hg"=list(min=1,max=6,n=5,class="int"),#"mod_ti_lags_hg"=list(min=0,max=7,n=7,class="int"),
                  "mod_ti_solar_gains"=list(min=0,max=0,n=0,class="int"),
                  "mod_ti_infiltrations"=list(min=0,max=0,n=0,class="int"),
                  "sunAzimuth_nharmonics"=list(min=2,max=5,n=3,class="int"),
@@ -161,13 +161,14 @@ optimization_results <- suppressMessages(
     df = df,##DATA TO RUN
     train_dates = train_dates,##DATA TO RUN
     val_dates = val_dates,##DATA TO RUN
-    popSize = 64,#32 ##MODEL
-    maxiter = 15,#10 ##MODEL
+    popSize = 100,#32 ##MODEL
+    maxiter = 20,#10 ##MODEL
     monitor = gaMonitor2,##MODEL
     parallel = "snow", #change for windows  ##MODEL
     elitism = 0.08,#0.08 ##MODEL
-    pmutation = 0.05)#0.05 ##MODEL
+    pmutation = 0.10)#0.05 ##MODEL
 )
+#X<-optimization_results@solution[1,]
 
 params <- decodeValueFromBin(binary_representation = optimization_results@solution[1,],
                              class_per_feature = mapply(function(i){i[['class']]},features), 
@@ -234,13 +235,6 @@ ccf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,mod_tsupply$model$te_
 
 plot(model)
 
-vec <- {}
-for (i in 1:length(mod_ti$fitted.values)) {
-  vec <- c(vec, mod_ti$fitted.values[[i]])
-}
-
-plot(1:length(mod_ti$fitted.values), mod_ti$model$ti_l0-vec)
-
 plot(mod_ti$residuals)
 
 # Validation of the models in 24h predictions
@@ -287,10 +281,12 @@ grid.arrange(
 #Dates taken into account (validation dates)
 forecast_dates_df <- df$time[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(val_dates[length(val_dates)] + days(1))] #& df$time<=(val_dates[length(val_dates)] + days(1))
 train_dates_df <- df$time[df$time>=train_dates[1]]
-
 # val_dates
 # train_dates
-
+# forecast_dates_df <- train_dates_df
+# forecast_dates_df <- df$time[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(train_dates[length(train_dates)] + days(1))]
+# forecast_dates_df <- df$time[df$time>=(train_dates[length(train_dates)] + days(1))]
+forecast_dates_df <- df$time[as.Date(df$time) %in% val_dates]
 #Forecast and storage of the results
 ti_df <- {}
 ti_l0_df <- {}
@@ -314,7 +310,7 @@ for (i in 1:length(forecast_dates_df)) {
 #Compute R2
 R2_df <- 1-sum((ti_df-ti_l0_df)^2)/sum((ti_df-mean(ti_df))^2)
 R2_df
-
+# predv$tsupply_l0
 # plot(ti_df,ti_l0_df) + abline(a = 0, b = 1, col="red")
 ggplot(data.frame(ti_df=ti_df,ti_l0_df=ti_l0_df,ii_df=ii_df))+geom_point(aes(ti_df,ti_l0_df)) + facet_wrap(~ii_df)
 
@@ -326,7 +322,7 @@ R2_df_1
 ti_df_1 <- ti_df[seq(1, length(ti_df), 12)]
 ti_l0_df_1 <- ti_l0_df[seq(1, length(ti_df), 12)]
 #Check l0 is the original data
-plot(ti_l0_df_1, df$ti[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(val_dates[length(val_dates)] + days(1))])
+plot(ti_df_1, df$ti[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(val_dates[length(val_dates)] + days(1))])
 max(ti_df_1 - df$ti[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(val_dates[length(val_dates)] + days(1))])
 
 # plot(1:length(ti_df),ti_l0_df-ti_df)
