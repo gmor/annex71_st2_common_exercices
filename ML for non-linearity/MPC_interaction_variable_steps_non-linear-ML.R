@@ -5,7 +5,7 @@
 # MPCsubex1
 
 setwd("~/GitHub/annex71_st2_common_exercices")
-source("functions.R")
+source("ML for non-linearity/functions_non-linear-ML.R")
 
 # Libraries for mathematics
 library(expm)
@@ -102,13 +102,20 @@ eligible_dates <- all_dates[2:length(all_dates)]
 # train_dates <- sample(eligible_dates,size = length(eligible_dates)*0.9,replace = F)
 # val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
 
-train_dates <- eligible_dates[1:floor(length(eligible_dates)*0.75)]
-val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
+# train_dates <- eligible_dates[1:floor(length(eligible_dates)*0.75)]
+# val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
 
-# train_dates <- eligible_dates[eligible_dates>as.POSIXct(x = "2019-01-02 23:00:00 UTC", tz = "UTC")] #Excluiding the test dates
-train_dates <- sample(eligible_dates,round(length(eligible_dates)*0.75,0),replace = F)
-val_dates <- eligible_dates[!(eligible_dates %in% train_dates)] #Same as testing dates
-plot(train_dates,rep(1,length(train_dates)))
+train_dates_1 <- eligible_dates[eligible_dates<as.POSIXct(x = "2018-12-30", tz = "UTC") |  
+                                  eligible_dates>as.POSIXct(x = "2019-01-12", tz = "UTC") & 
+                                  eligible_dates<as.POSIXct(x = "2019-01-23", tz = "UTC")] #Excluiding the test dates
+train_dates_2 <- eligible_dates[eligible_dates>as.POSIXct(x = "2019-01-22", tz = "UTC")]
+# train_dates_2 <- train_dates[!(train_dates %in% train_dates_1)]
+# train_dates <- sample(eligible_dates,round(length(eligible_dates)*0.75,0),replace = F)
+val_dates <- eligible_dates[!(eligible_dates %in% train_dates_1) & !(eligible_dates %in% train_dates_2)] #Same as testing dates
+# plot(train_dates_2,rep(1,length(train_dates_2)))
+# ggplotly(ggplot() +geom_line(aes(x = df$time,y = df$te)),
+#        dynamicTicks = "x")
+
 
 # Optimize the alpha values of the low pass filters
 features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
@@ -123,9 +130,9 @@ features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "mod_tsupply_ar"=list(min=1,max=4,n=3,class="int"),
                  "mod_tsupply_lags_hp_cons"=list(min=0,max=4,n=4,class="int"),#"mod_tsupply_lags_hp_cons"=list(min=0,max=3,n=3,class="int"),
                  "mod_tsupply_lags_dti"=list(min=0,max=0,n=0,class="int"),
-                 "mod_ti_ar"=list(min=3,max=7,n=4,class="int"),#"mod_ti_ar"=list(min=1,max=9,n=8,class="int"), #5,3
+                 "mod_ti_ar"=list(min=3,max=6,n=3,class="int"),#"mod_ti_ar"=list(min=1,max=9,n=8,class="int"), #5,3
                  "mod_ti_ar2"=list(min=0,max=0,n=0,class="int"),#
-                 "mod_ti_lags_te"=list(min=2,max=4,n=2,class="int"),
+                 "mod_ti_lags_te"=list(min=2,max=3,n=1,class="int"),
                  "mod_ti_lags_diff"=list(min=0,max=1,n=1,class="int"),
                  "mod_ti_lags_dti"=list(min=1,max=6,n=5,class="int"),#"mod_ti_lags_dti"=list(min=2,max=9,n=7,class="int"),
                  "mod_ti_lags_GHI"=list(min=0,max=0,n=0,class="int"),
@@ -133,7 +140,7 @@ features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
                  "mod_ti_lags_infiltrations"=list(min=0,max=2,n=2,class="int"),
                  "mod_ti_lags_humidity"=list(min=0,max=0,n=0,class="int"),
                  "mod_ti_lags_ventilation"=list(min=0,max=1,n=1,class="int"),
-                 "mod_ti_lags_hg"=list(min=1,max=6,n=5,class="int"),#"mod_ti_lags_hg"=list(min=0,max=7,n=7,class="int"),
+                 "mod_ti_lags_hg"=list(min=1,max=5,n=4,class="int"),#"mod_ti_lags_hg"=list(min=0,max=7,n=7,class="int"),
                  "mod_ti_solar_gains"=list(min=0,max=0,n=0,class="int"),
                  "mod_ti_infiltrations"=list(min=0,max=0,n=0,class="int"),
                  "sunAzimuth_nharmonics"=list(min=2,max=5,n=3,class="int"),
@@ -159,14 +166,14 @@ optimization_results <- suppressMessages(
     names_per_feature = names(features),##DATA TO RUN
     selection = gabin_tourSelection,##MODEL
     df = df,##DATA TO RUN
-    train_dates = train_dates,##DATA TO RUN
+    train_dates = train_dates_1,##DATA TO RUN
     val_dates = val_dates,##DATA TO RUN
     popSize = 100,#32 ##MODEL
     maxiter = 20,#10 ##MODEL
     monitor = gaMonitor2,##MODEL
     parallel = "snow", #change for windows  ##MODEL
     elitism = 0.08,#0.08 ##MODEL
-    pmutation = 0.10)#0.05 ##MODEL
+    pmutation = 0.05)#0.05 ##MODEL
 )
 #X<-optimization_results@solution[1,]
 
@@ -176,33 +183,36 @@ params <- decodeValueFromBin(binary_representation = optimization_results@soluti
                              min_per_feature = mapply(function(i){i[['min']]},features),
                              max_per_feature = mapply(function(i){i[['max']]},features))
 names(params) <- names(features)
+# missing_params <- 0
+# names(missing_params) <- "mod_hp_cons_lags_ti"
+# params <- append(params, missing_params) 
+
 
 # print(params)
 # Calculate the models with consumption as output (result_q) and indoor temperature as output (result_ti).
-result_q <- calculate_model_q(params, df, train_dates, output="model") #df
+result_q <- calculate_model_q(params, df, train_dates_1, output="model") #df
 mod_q <- result_q$mod
 
-result_ti <- calculate_model_ti(params, df, train_dates, output="model") #df
+result_ti <- calculate_model_ti(params, df, train_dates_1, output="model") #df
 mod_ti <- result_ti$mod
 
-result_tsupply <- calculate_model_tsupply(params, df, train_dates, output="model") #df
+result_tsupply <- calculate_model_tsupply(params, df, train_dates_1, output="model") #df
 mod_tsupply <- result_tsupply$mod
 
-
-#Test to simulate ti with ML
-library(mlr)
-library(mlrMBO)
-library(autoxgboost)
-library(xgboost)
-library(zoo)
-#dfr <- df[,!(colnames(df) %in% c("vent", "windSpeed", "windBearing", "humidity", "sunAz", "sunEl", "GHI"))]
-# ti_mod <- as.list(rollmean(df["ti"], 4, align = "center", fill = "extend"))
-df_mod <- df#[,!(colnames(df) %in% "ti")]
-# df_mod["ti"] <- as.numeric(ti_mod)
- 
-result_ti <- calculate_model_ti_AutoXGboost(params, df_mod, train_dates, output="model") #df
-mod_ti <- result_ti$mod
-summary(mod_ti$final.learner)
+# #Test to simulate ti with ML
+#     library(mlr)
+#     library(mlrMBO)
+#     library(autoxgboost)
+#     library(xgboost)
+#     library(zoo)
+#     #dfr <- df[,!(colnames(df) %in% c("vent", "windSpeed", "windBearing", "humidity", "sunAz", "sunEl", "GHI"))]
+#     # ti_mod <- as.list(rollmean(df["ti"], 4, align = "center", fill = "extend"))
+#     df_mod <- df#[,!(colnames(df) %in% "ti")]
+#     # df_mod["ti"] <- as.numeric(ti_mod)
+#      
+#     result_ti <- calculate_model_ti_AutoXGboost(params, df_mod, train_dates, output="model") #df
+#     mod_ti <- result_ti$mod
+#     summary(mod_ti$final.learner)
 
 #Graphics to check if the ARX model fits
 cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values)
@@ -225,7 +235,7 @@ ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$te_l0)
 ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$hg_l0)
 ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$BHI_l0)
 ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$vent_l0)
-ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$ti_l0)
+# ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$ti_l0)
 ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$`as.factor(hp_status_l1)`)
 ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$infiltrations_l0)
 # ccf(mod_ti$model$ti_l0-mod_ti$fitted.values,mod_ti$model$)
@@ -234,8 +244,6 @@ ccf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,mod_tsupply$model$tsu
 ccf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,mod_tsupply$model$`as.factor(hp_status_l0)`)
 ccf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,mod_tsupply$model$hp_cons_l0)
 ccf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,mod_tsupply$model$te_raw_l0)
-
-plot(model)
 
 plot(mod_ti$residuals)
 
@@ -281,14 +289,14 @@ grid.arrange(
 
 #### R2 of the first dataset
 #Dates taken into account (validation dates)
-forecast_dates_df <- df$time[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(val_dates[length(val_dates)] + days(1))] #& df$time<=(val_dates[length(val_dates)] + days(1))
+# forecast_dates_df <- df$time[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(val_dates[length(val_dates)] + days(1))] #& df$time<=(val_dates[length(val_dates)] + days(1))
 train_dates_df <- df$time[df$time>=train_dates[1]]
 # val_dates
 # train_dates
 # forecast_dates_df <- train_dates_df
 # forecast_dates_df <- df$time[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC") & df$time<=(train_dates[length(train_dates)] + days(1))]
 # forecast_dates_df <- df$time[df$time>=(train_dates[length(train_dates)] + days(1))]
-forecast_dates_df <- df$time[as.Date(df$time) %in% train_dates]
+forecast_dates_df <- df$time[as.Date(df$time) %in% val_dates]
 #Forecast and storage of the results
 ti_df <- {}
 ti_l0_df <- {}
@@ -312,15 +320,26 @@ for (i in 1:length(forecast_dates_df)) {
 #Compute R2
 R2_df <- 1-sum((ti_df-ti_l0_df)^2)/sum((ti_df-mean(ti_df))^2)
 R2_df
+error <- ti_df-ti_l0_df
+max(abs(error))
+# plot(error)
+# (length(error)/12)/24
 # predv$tsupply_l0
 # plot(ti_df,ti_l0_df) + abline(a = 0, b = 1, col="red")
 ggplot(data.frame(ti_df=ti_df,ti_l0_df=ti_l0_df,ii_df=ii_df))+geom_point(aes(ti_df,ti_l0_df)) + facet_wrap(~ii_df)
 
-ggplot(data.frame(ti_df=ti_df[seq(1, length(ti_df), 12)], ti_l0_df=ti_l0_df[seq(1, length(ti_l0_df), 12)], ii_df=ii_df[seq(1, length(ii_df), 12)])) +
+iter <- 3
+ggplot(data.frame(ti_df=ti_df[seq(iter, length(ti_df), 12)], ti_l0_df=ti_l0_df[seq(iter, length(ti_l0_df), 12)], ii_df=ii_df[seq(iter, length(ii_df), 12)])) +
   geom_point(aes(ti_df,ti_l0_df))
 
-R2_df_1 <- 1-sum((ti_df[seq(1, length(ti_df), 12)]-ti_l0_df[seq(1, length(ti_l0_df), 12)])^2)/sum((ti_df[seq(1, length(ti_l0_df), 12)]-mean(ti_df[seq(1, length(ti_l0_df), 12)]))^2)
-R2_df_1
+R2_df_ <- {}
+for (i in 1:12) {
+  forecast_horit <- i
+  R2_df_[i] <- 1-sum((ti_df[seq(forecast_horit, length(ti_df), 12)]-ti_l0_df[seq(forecast_horit, length(ti_l0_df), 12)])^2)/
+    sum((ti_df[seq(forecast_horit, length(ti_l0_df), 12)]-mean(ti_df[seq(forecast_horit, length(ti_l0_df), 12)]))^2)
+}
+R2_df_
+
 ti_df_1 <- ti_df[seq(1, length(ti_df), 12)]
 ti_l0_df_1 <- ti_l0_df[seq(1, length(ti_df), 12)]
 #Check l0 is the original data
@@ -378,6 +397,130 @@ ggplot(data.frame(ti_df2=ti_df2,ti_l0_df2=ti_l0_df2,ii_df2=ii_df2))+geom_point(a
   facet_wrap(~ii_df2) + abline(a = 0, b = 1, col="red")
 # 
 # plot(1:length(ti_df2),abs(ti_l0_df2-ti_df2))
+
+######################################################### MODEL THE NON-LINEARITY #####################################################
+forecast_error_dates_df <- df$time[as.Date(df$time) %in% train_dates_1 | as.Date(df$time) %in% train_dates_2]
+forecast_error_dates_df <- df$time[as.Date(df$time) %in% train_dates_2]
+
+#Forecast and storage of the results
+ti_df <- {}
+ti_l0_df <- {}
+ii_df <- c()
+predv_df <- data.frame({})
+for (i in 1:length(forecast_error_dates_df)) {
+  predv <- prediction_scenario(
+    mod_q = mod_q, 
+    mod_ti = mod_ti,
+    mod_tsupply = mod_tsupply,
+    df = df,#df,
+    rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% forecast_error_dates_df,
+    hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
+    params = params,
+    ts_prediction = forecast_error_dates_df[i]#NULL
+  )
+  
+  for (i in 1:length(predv_1)) {
+    predv_1 <- predv[i,]
+    predv_1 <- as.data.frame(c(predv_1, "error_1" = (predv_1$ti - predv_1$ti_l0)))
+    predv_df <- rbind(predv_df, predv_1)
+  }
+  ti_df <- c(ti_df, predv$ti) #vector of the 12h real values in each iteration
+  ti_l0_df <- c(ti_l0_df, predv$ti_l0) #vector of the 12h forecasts in each iteration
+  ii_df <- c(ii_df,1:nrow(predv))
+}
+
+#Compute R2
+R2_df <- 1-sum((ti_df-ti_l0_df)^2)/sum((ti_df-mean(ti_df))^2)
+R2_df
+error <- ti_df-ti_l0_df
+max(abs(error))
+max(abs(predv_df$error_1),na.rm = TRUE)
+plot(predv_df$error_1)
+hist(predv_df$error_1,breaks = 20)
+# df <- df[,!grepl(c("time|ti_l0|^dti|^dtf|^dte|^te_raw"),colnames(df))]
+df_train_nonlin <- subset(predv_df, select = -c(time,date,ti_l0,dti,dti,dtf,dte,te_raw,ts_prediction))
+df_train_nonlin <- df_train_nonlin[!is.na(df_train_nonlin$error_1),]
+
+trainTask <- makeRegrTask(data = df_train_nonlin, target = "error_1")
+
+ctrl <- makeMBOControl()
+mod_nonlin <- autoxgboost(trainTask,
+                   control = ctrl,
+                   measure = rmse,
+                   #tune.threshold = FALSE,
+                   # max.nrounds=1500,
+                   mbo.learner = makeLearner(cl = "regr.bgpllm", predict.type = "se",
+                                             par.vals = list()), #"regr.randomForest"
+                   #"regr.crs" i "regr.bgpllm" sembla que funciona be pero no aconsegueixo reduir l'overfit amb iterations=5 iteracion i design.size=2
+                   # par.set = autoxgbparset.mixed,
+                   iterations = 5L
+                   #build.final.model = T,
+                   #design.size = 15L
+)
+
+library(xgboost)
+mod_nonlin$final.learner
+mod2 <- xgb.train(
+  params=list(booster="gbtree", objective= "reg:linear",
+              eta=0.0673,gamma=0.00811,max_depth=20,colsample_bytree=0.504,colsample_bylevel=0.808,lambda=0.00243,alpha=0.00276,subsample=0.91),
+  data= xgb.DMatrix(as.matrix(df_train_nonlin[,!(colnames(df_train_nonlin)%in%c("error_1"))]),label=df_train_nonlin$error_1),
+  nrounds=69,
+  # eval_metrix="rmse"
+)
+
+mat <- xgb.importance(feature_names = colnames(df_train_nonlin),model=mod2)
+xgb.plot.importance(importance_matrix = mat[1:20]) #first 20 variables
+
+result_error <- mod_nonlin$final.model
+summary(result_error)
+
+error_1_p <- predict(mod_nonlin, predv_df[,colnames(df_train_nonlin)])$data$response
+plot(predv_df$time,predv_df$error_1)
+plot(predv_df$time,(predv_df$error_1-error_1_p))
+
+sum(abs(predv_df$error_1))/length(predv_df$error_1)
+sum(abs(predv_df$error_1-error_1_p))/length(predv_df$error_1)
+
+#Forecast with nonlineatity
+df_train_nonlin_colnames <- colnames(df_train_nonlin)
+df_train_nonlin_colnames <- df_train_nonlin_colnames[-length(df_train_nonlin_colnames)]
+df_train_nonlin <- subset(predv_df, select = -c(time,date,ti_l0,dti,dti,dtf,dte,te_raw,ts_prediction))
+
+
+ML_forecast_error_dates_df <- df$time[as.Date(df$time) %in% val_dates]
+ML_ti_df <- {}
+ML_ti_l0_df <- {}
+ML_ii_df <- c()
+ML_predv_df <- data.frame({})
+for (i in 1:length(ML_forecast_error_dates_df)) {
+  predv <- prediction_scenario(
+    mod_q = mod_q, 
+    mod_ti = mod_ti,
+    mod_tsupply = mod_tsupply,
+    df = df,#df,
+    rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% ML_forecast_error_dates_df,
+    hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
+    params = params,
+    ts_prediction = ML_forecast_error_dates_df[i],#NULL
+    df_train_nonlin_colnames = df_train_nonlin_colnames,#NULL
+    mod_nonlin = mod_nonlin#NULL
+  )
+  ML_predv_1 <- predv[1,]
+  ML_predv_1 <- as.data.frame(c(ML_predv_1, "error_1" = (ML_predv_1$ti - ML_predv_1$ti_l0)))
+  ML_predv_df <- rbind(ML_predv_df, ML_predv_1)
+  ML_ti_df <- c(ML_ti_df, predv$ti) #vector of the 12h real values in each iteration
+  ML_ti_l0_df <- c(ML_ti_l0_df, predv$ti_l0) #vector of the 12h forecasts in each iteration
+  ML_ii_df <- c(ML_ii_df,1:nrow(predv))
+}
+
+ML_R2_df <- 1-sum((ML_ti_df-ML_ti_l0_df)^2)/sum((ML_ti_df-mean(ML_ti_df))^2)
+ML_R2_df
+error <- ti_df-ti_l0_df
+max(abs(error))
+max(abs(predv_df$error_1))
+plot(predv_df$error_1)
+hist(predv_df$error_1,breaks = 20)
+
 
 ######################################################### SIMULATION INICIALIZATION #########################################################
 

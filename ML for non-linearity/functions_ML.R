@@ -99,7 +99,8 @@ calculate_model_ti_AutoXGboost <- function(params, df, train_dates, output="aic"
   }
 }
 
-prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=NULL, hp_tset_24h, params, ts_prediction=NULL){
+prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=NULL, hp_tset_24h, params, ts_prediction=NULL,
+                                df_train_nonlin_colnames = NULL, mod_nonlin = NULL){
   
   df <- tune_model_input(df,params)
   if(!is.null(rows_to_filter) && sum(rows_to_filter,na.rm=T)>0){ 
@@ -137,6 +138,9 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
       df_$hp_cons_l0[i] <- 0
       tsupply_ff <- df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
       ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,mod_ti$force_colnames])$data$response
+      if (!is.null(mod_nonlin)) {
+        ti_ff <- df_$ti_l0[i] <- df_$ti_l0[i]-predict(mod_nonlin, df_[i,df_train_nonlin_colnames])$data$response
+      }
       # If the heat pump should be on, estimate the heat pump consumption and 
       # re-estimate the floor and indoor temperatures considering the heat input.
       if(df_$hp_status_l0[i]==1 && !is.na(tsupply_ff) && !is.na(ti_ff)){
@@ -145,6 +149,9 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
         if(df_$hp_cons_l0[i]>0){
           # df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
           df_$ti_l0[i] <- predict(mod_ti, df_[i,mod_ti$force_colnames])$data$response
+          if (!is.null(mod_nonlin)) {
+            ti_ff <- df_$ti_l0[i] <- df_$ti_l0[i]-predict(mod_nonlin, df_[i,df_train_nonlin_colnames])$data$response
+          }
           # If heat pump consumption estimation is negative, then consider the indoor and 
           # floor temperatures estimated with free floating conditions
         } else {

@@ -5,7 +5,7 @@
 # MPCsubex1
 
 setwd("~/GitHub/annex71_st2_common_exercices")
-source("functions.R")
+source("MultiObjective/functions-MultiObjective.R")
 
 # Libraries for mathematics
 library(expm)
@@ -20,6 +20,7 @@ library(extrafont)
 library(reshape2)
 library(plotly)
 loadfonts()
+library(mco)#Multiobjective
 
 # Libraries for data wrangling
 library(padr)
@@ -30,6 +31,7 @@ library(GA)
 library(data.table)
 library(readxl) 
 library(doParallel)
+
 
 # library to integrate Python
 library(reticulate)
@@ -108,7 +110,7 @@ val_dates <- eligible_dates[!(eligible_dates %in% train_dates)]
 # train_dates <- eligible_dates[eligible_dates>as.POSIXct(x = "2019-01-02 23:00:00 UTC", tz = "UTC")] #Excluiding the test dates
 train_dates <- sample(eligible_dates,round(length(eligible_dates)*0.75,0),replace = F)
 val_dates <- eligible_dates[!(eligible_dates %in% train_dates)] #Same as testing dates
-plot(train_dates,rep(1,length(train_dates)))
+# plot(train_dates,rep(1,length(train_dates)))
 
 # Optimize the alpha values of the low pass filters
 features <- list("alpha_te"=list(min=0,max=0.9,n=31,class="float"),
@@ -189,20 +191,20 @@ result_tsupply <- calculate_model_tsupply(params, df, train_dates, output="model
 mod_tsupply <- result_tsupply$mod
 
 
-#Test to simulate ti with ML
-library(mlr)
-library(mlrMBO)
-library(autoxgboost)
-library(xgboost)
-library(zoo)
-#dfr <- df[,!(colnames(df) %in% c("vent", "windSpeed", "windBearing", "humidity", "sunAz", "sunEl", "GHI"))]
-# ti_mod <- as.list(rollmean(df["ti"], 4, align = "center", fill = "extend"))
-df_mod <- df#[,!(colnames(df) %in% "ti")]
-# df_mod["ti"] <- as.numeric(ti_mod)
- 
-result_ti <- calculate_model_ti_AutoXGboost(params, df_mod, train_dates, output="model") #df
-mod_ti <- result_ti$mod
-summary(mod_ti$final.learner)
+# #Test to simulate ti with ML
+# library(mlr)
+# library(mlrMBO)
+# library(autoxgboost)
+# library(xgboost)
+# library(zoo)
+# #dfr <- df[,!(colnames(df) %in% c("vent", "windSpeed", "windBearing", "humidity", "sunAz", "sunEl", "GHI"))]
+# # ti_mod <- as.list(rollmean(df["ti"], 4, align = "center", fill = "extend"))
+# df_mod <- df#[,!(colnames(df) %in% "ti")]
+# # df_mod["ti"] <- as.numeric(ti_mod)
+#  
+# result_ti <- calculate_model_ti_AutoXGboost(params, df_mod, train_dates, output="model") #df
+# mod_ti <- result_ti$mod
+# summary(mod_ti$final.learner)
 
 #Graphics to check if the ARX model fits
 cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values)
@@ -671,17 +673,17 @@ while (time <= max_time) {
     df$ti[df$time == time_to_predict_step] = 
       sum(df_result_20s$Temp_aver[(length(df_result_20s$Temp_aver)-(3600/step_size)):(length(df_result_20s$Temp_aver)-1)])/(3600/step_size)
     
-    # nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features)))
-    # class_per_feature = mapply(function(i){i[['class']]},features)
-    # nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features)
-    # levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
-    # names_per_feature = names(features)
-    # time_to_predict = time_to_predict_step
-
+    nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features)))
+    class_per_feature = mapply(function(i){i[['class']]},features)
+    nclasses_per_feature = mapply(function(i){length(i[["levels"]])},features)
+    levels_per_feature = lapply(function(i){i[["levels"]]}, X = features)
+    names_per_feature = names(features)
+    time_to_predict = time_to_predict_step
+    
     #Compute GA
     optimization_results_MPC <- suppressMessages(
       ga(
-        type = "binary",
+        type = "binary", #real-valued #binary
         fitness = optimizer_MPC,
         nBits = sum(mapply(function(x) { nchar(toBin(x)) }, mapply(function(i){length(i[["levels"]])},features))),
         class_per_feature = mapply(function(i){i[['class']]},features),
@@ -708,6 +710,20 @@ while (time <= max_time) {
         pmutation = 0.15, #0.05
         maxFitness = 0
       ))
+    
+    # optimization_results_MPC <- nsga2(
+    #         fn = optimizer_MPC(class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
+    #                            df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params, multiob = T),
+    #         idim = 12,
+    #         odim = 2,
+    #         popsize = 100,
+    #         generations = 20,
+    #         cprob = 0.5, cdist = 20,
+    #         mprob = 0.2, mdist = 20,
+    #         lower.bounds = rep(28, 12),
+    #         upper.bounds = rep(42, 12)
+    #       )
+    
     
     #Get the solution of the optimization
     params_hp_tset_24h_opt <- as.numeric(decodeValueFromBin(binary_representation = optimization_results_MPC@solution[1,],
