@@ -5,7 +5,7 @@
 # MPCsubex1
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Use of penalized()/penalized-functions.R")
+source("Paper_horizon_length/penalized-functions.R")
 
 # Libraries for mathematics
 library(expm)
@@ -126,7 +126,7 @@ val_dates <- eligible_dates[!(eligible_dates %in% train_dates_1) & !(eligible_da
 ######################################################### SIMULATION INICIALIZATION #########################################################
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Use of penalized()/penalized-functions.R")
+source("Paper_horizon_length/penalized-functions.R")
 
 # The output should be the prediction of the optimum heat pump's status (ON/OFF) and set point temperature 
 # for the next 24 hours (both parameters are saved in the vector: params_hp_tset_24h). 

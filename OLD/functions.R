@@ -691,15 +691,16 @@ printlm <- function(mod, df, value_column, value_repr, ncol, irf_objects=NULL){
   
 }
 
-calculate_model_ti <- function(params, df, train_dates, output="aic", penalty = NULL){
+calculate_model_ti <- function(params, df, train_dates, output="aic"){
+  
   
   df <- tune_model_input(df,params)
   
   df <- df[as.Date(df$time,"Europe/Madrid") %in% train_dates,]
   df <- df[complete.cases(df),]
   
-  # Formula definition. Base formula + GHI and windSpeed terms #ti_l0~
-  formula <-  as.formula(sprintf("~ 
+  # Formula definition. Base formula + GHI and windSpeed terms
+  formula <-  as.formula(sprintf("ti_l0 ~ 
                                  0 + %s",
                                  paste(
                                    paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),#paste0("ti_l",1:params["mod_ti_ar"],"",collapse=" + "),
@@ -709,10 +710,11 @@ calculate_model_ti <- function(params, df, train_dates, output="aic", penalty = 
                                    #paste0("tsupply_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
                                    paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
                                    paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + "),
-                                   paste0("BHI_l",0:(params["mod_ti_lags_BHI"]),":fs(sunAz/360,2)",collapse=" + "),
+                                   paste0("BHI_l",1:(params["mod_ti_lags_BHI"]),":fs(sunAz/360,2)",collapse=" + "),
                                    #paste0("vent_l",0:(params["mod_ti_lags_ventilation"]),"",collapse=" + "),
                                    sep=" + "
-                                 )))
+                                 )
+  ))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
   # if(params["mod_ti_solar_gains"]==1){
@@ -735,19 +737,7 @@ calculate_model_ti <- function(params, df, train_dates, output="aic", penalty = 
   #   }
   # }
   
-  # formula2 <- update.formula(formula, ti_l0~.)
-  # mod2 <- lm(formula2, data=df)
-  # coef(mod2)
-  
-  # mod <- penalized(response = df$ti_l0, penalized = model.matrix(formula, df), unpenalized = ~ 0, lambda1 = 0,lambda2 = 0)
-  if (is.null(penalty)) {
-    mod <- penalized(response = df$ti_l0, penalized = model.matrix(formula, df), unpenalized = ~ 0, lambda1 = 0,lambda2 = 0)
-  } else {
-    mod <- penalized(response = df$ti_l0, penalized = model.matrix(formula, df), unpenalized = ~ 0, lambda1 = penalty["L1"],lambda2 = penalty["L2"])
-  }
-  mod@nuisance$formula <- formula
-  mod@nuisance$ti_l0 <- df$ti_l0
-  # coef(mod)
+  mod <- lm(formula, data=df)
   
   if(output == "model"){
     return(list("mod"=mod,"df"=df))
@@ -1380,13 +1370,12 @@ plot_irf <- function(linear_coefficients, impulse_lags, pattern_ar_coefficients,
   }
 }
 
-prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=NULL, hp_tset_24h, params, horizon, ts_prediction=NULL,
-                                df_train_nonlin_colnames = NULL, mod_nonlin = NULL){
-  # df <- merge(df_house,df_weather)
+prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=NULL, hp_tset_24h, params, ts_prediction=NULL){
+  
   df <- tune_model_input(df,params)
   if(!is.null(rows_to_filter) && sum(rows_to_filter,na.rm=T)>0){ 
     df <- df[rows_to_filter,]
-    hp_tset_24h <- hp_tset_24h[rows_to_filter] # hp_tset_24h <- hp_tset_24h_saved[rows_to_filter]
+    hp_tset_24h <- hp_tset_24h[rows_to_filter]
   }
   #df <- df[complete.cases(df),]
   
@@ -1395,14 +1384,6 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
   # # CHANGED HERE:
   if(is.null(ts_prediction)){
     ts_prediction <- smartAgg(df,"date",function(x){x[sample(1:length(x),1)]},"time",catN = F)$time #min(x,na.rm=T)
-    if (horizon == 24) {
-      #ts_prediction <- ts_prediction[-length(ts_prediction)]
-      ts_prediction[length(ts_prediction)] <- as.POSIXct(x = sprintf("%i-%02i-%02i 23:00:00 UTC", 
-                                                                      year(ts_prediction[length(ts_prediction)]), 
-                                                                      month(ts_prediction[length(ts_prediction)]), 
-                                                                      day(ts_prediction[length(ts_prediction)])-1), 
-                                                          tz = "UTC")
-    }
   }
   
   # ts_prediction <- df$time[1]
@@ -1413,7 +1394,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
     # Filter the initial dataset 
     # ts_ = ts_prediction[1]
     # df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(23)),]
-    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(horizon-1)),]
+    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(11)),]
     df_$ts_prediction <- ts_
     
     # Assign the control variables of the scenario
@@ -1422,29 +1403,19 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, df, rows_to_filter=N
     
     # Iterate for each timestep (1 hour)
     for (i in 1:nrow(df_)){
-      
-      #i=12 i=nrow(df_) i=21
+      #i=12
       # Calculate the floor temperature and indoor temperature under free floating conditions
       df_$hp_cons_l0[i] <- 0
       tsupply_ff <- df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
-      
-      ti_ff <- df_$ti_l0[i] <- (model.matrix(mod_ti@nuisance$formula, df_)[,colnames(model.matrix(mod_ti@nuisance$formula, df_)) %in% names(coef(mod_ti))] %*% coef(mod_ti))[i]#predict(mod_ti, df_[i,])
-      
-      if (!is.null(mod_nonlin)) {
-        ti_ff <- df_$ti_l0[i] <- df_$ti_l0[i]-predict(mod_nonlin, df_[i,df_train_nonlin_colnames])$data$response
-      }
+      ti_ff <- df_$ti_l0[i] <- predict(mod_ti, df_[i,])
       # If the heat pump should be on, estimate the heat pump consumption and 
       # re-estimate the floor and indoor temperatures considering the heat input.
       if(df_$hp_status_l0[i]==1 && !is.na(tsupply_ff) && !is.na(ti_ff)){
-        
         df_$tsupply_l0[i] <- df_$hp_tset_l0[i]
         df_$hp_cons_l0[i] <- predict(mod_q, df_[i,])
         if(df_$hp_cons_l0[i]>0){
           # df_$tsupply_l0[i] <- predict(mod_tsupply, df_[i,])
-          df_$ti_l0[i] <- (model.matrix(mod_ti@nuisance$formula, df_)[,colnames(model.matrix(mod_ti@nuisance$formula, df_)) %in% names(coef(mod_ti))] %*% coef(mod_ti))[i]#predict(mod_ti, df_[i,])
-          if (!is.null(mod_nonlin)) {
-            ti_ff <- df_$ti_l0[i] <- df_$ti_l0[i]-predict(mod_nonlin, df_[i,df_train_nonlin_colnames])$data$response
-          }
+          df_$ti_l0[i] <- predict(mod_ti, df_[i,])
           # If heat pump consumption estimation is negative, then consider the indoor and 
           # floor temperatures estimated with free floating conditions
         } else {
@@ -1741,7 +1712,7 @@ rmserr <- function (x, y, summary = FALSE){
 }
 
 optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_feature, min_per_feature, 
-                                       max_per_feature, names_per_feature, df, train_dates, val_dates, horizon){
+                                       max_per_feature, names_per_feature, df, train_dates, val_dates){
   #X=sample(c(0,1),nBits,replace=T)
   
   params <- decodeValueFromBin(X, class_per_feature, nclasses_per_feature, min_per_feature = min_per_feature, 
@@ -1755,12 +1726,6 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
     mod_ti <- calculate_model_ti(params, df, train_dates, output="model")$mod
   },error=function(e){return(-1000)})
   
-  # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates
-  # hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset)
-  # ts_prediction = NULL
-  # mod_nonlin = NULL
-  # hp_tset_24h_saved<-hp_tset_24h
-  
   # Validation of the models in 24h predictions
   predv <- prediction_scenario(
     mod_q = mod_q, 
@@ -1770,8 +1735,7 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
     rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
     hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
     params = params,
-    ts_prediction = NULL,
-    horizon = horizon
+    ts_prediction = NULL
   )
   
   # Accuracy indoor temperature and consumption
@@ -1781,7 +1745,7 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
   tsupply_diff <- rmserr(predv$tsupply[is.finite(predv$tsupply)],predv$tsupply_l0[is.finite(predv$tsupply)])$rmse
   
   # # Autocorrelations
-  a <- acf(mod_ti@nuisance$ti_l0-mod_ti@fitted,plot = F) #mod_ti@fitted #mod_ti$model$ti_l0-mod_ti$fitted.values
+  a <- acf(mod_ti$model$ti_l0-mod_ti$fitted.values,plot = F)
   inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
   a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = F)
   inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
@@ -1795,10 +1759,10 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
   # mod_q_dti <- sum(abs(plot_irf(mod_q$coefficients,24,"^dti_l",plot = F,exhogenous_coeff = T)$value)>10)
   # mod_q_te <- sum(abs(plot_irf(mod_q$coefficients,24,"^te_l",plot = F,exhogenous_coeff = T)$value)>10)
   
-  # # Percentage pvalue < 0.05 to all variables
-  # pval_q <- 1-(sum(summary(mod_q)$coef[,4]<=0.05) / nrow(summary(mod_q)$coef))
-  # pval_ti <- 1-(sum(summary(mod_ti)$coef[,4]<=0.05) / nrow(summary(mod_ti)$coef))
-  # pval_tsupply <- 1-(sum(summary(mod_tsupply)$coef[,4]<=0.05) / nrow(summary(mod_tsupply)$coef))
+  # Percentage pvalue < 0.05 to all variables
+  pval_q <- 1-(sum(summary(mod_q)$coef[,4]<=0.05) / nrow(summary(mod_q)$coef))
+  pval_ti <- 1-(sum(summary(mod_ti)$coef[,4]<=0.05) / nrow(summary(mod_ti)$coef))
+  pval_tsupply <- 1-(sum(summary(mod_tsupply)$coef[,4]<=0.05) / nrow(summary(mod_tsupply)$coef))
   
   score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
     -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
@@ -1812,7 +1776,7 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
 }
 
 optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params, horizon, post_analysis = F){
+                          df, mod_q, mod_ti, mod_tsupply, ti_min, ti_max, price, time_to_predict, params, post_analysis = F){
   
   #X=sample(c(0,1),nBits,replace=T)
   
@@ -1822,7 +1786,7 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
   
   # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% as.Date(time_to_predict)
   # time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(23), by = "hours")
-  time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(horizon-1), by = "hours")
+  time_to_predict_24h = seq(from = time_to_predict, to = time_to_predict + hours(11), by = "hours")
   rows_to_filter = df$time %in% time_to_predict_24h
   hp_tset_24h = numeric(nrow(df))
   hp_tset_24h[rows_to_filter] <- params_hp_tset_24h
@@ -1836,7 +1800,6 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     rows_to_filter = rows_to_filter,
     hp_tset_24h = hp_tset_24h, #ifelse(df$hp_status==0,NA,df$hp_tset),
     params = params,
-    horizon = horizon,
     ts_prediction = time_to_predict #min(df$time)
   )
 
@@ -1909,121 +1872,3 @@ penalty_function <- function(x, delta_limit, lambda){
   return(y)
 }
 
-penalty_optimizer <- function(X, min_per_penalty, max_per_penalty, nclasses_per_penalty, class_per_penalty, names_per_penalty, 
-                              df, train_dates, val_dates, formula, mod_q, mod_tsupply, horizon, params) {
-  #X=sample(c(0,1),nBits,replace=T)
-  
-  penalties <- decodeValueFromBin(X, class_per_penalty, nclasses_per_penalty, min_per_feature = min_per_penalty, 
-                               max_per_feature = max_per_penalty)
-  names(penalties) <- names_per_penalty
-  
-  #df is tunned to match the formula and is cutted to use only the train dates
-  df_mod <- tune_model_input(df,params)
-  df_mod <- df_mod[as.Date(df_mod$time,"Europe/Madrid") %in% train_dates,]
-  df_mod <- df_mod[complete.cases(df_mod),]
-  
-  mod_ti <- penalized(response = df_mod$ti_l0, penalized = model.matrix(formula, df_mod), unpenalized = ~ 0,
-                      lambda1 = penalties["L1"],lambda2 = penalties["L2"])#lambda1 = penalties["L1"],lambda2 = penalties["L2"]
-  mod_ti@nuisance$formula <- formula
-  mod_ti@nuisance$ti_l0 <- df_mod$ti_l0
-  
-  # rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates
-  # hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset)
-  # ts_prediction = NULL
-  # mod_nonlin = NULL
-  # hp_tset_24h_saved<-hp_tset_24h
-  
-  # Validation of the models in 24h predictions
-  predv <- prediction_scenario(
-    mod_q = mod_q, 
-    mod_ti = mod_ti,
-    mod_tsupply = mod_tsupply,
-    df = df,
-    rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
-    hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
-    params = params,
-    ts_prediction = NULL,
-    horizon = horizon
-  )
-  
-  # Accuracy indoor temperature and consumption
-  q_diff <- rmserr(predv$hp_cons[is.finite(predv$hp_cons) & predv$hp_cons>0],
-                   predv$hp_cons_l0[is.finite(predv$hp_cons) & predv$hp_cons>0])$rmse
-  ti_diff <- rmserr(predv$ti[is.finite(predv$ti)],predv$ti_l0[is.finite(predv$ti)])$rmse
-  tsupply_diff <- rmserr(predv$tsupply[is.finite(predv$tsupply)],predv$tsupply_l0[is.finite(predv$tsupply)])$rmse
-  
-  # # Autocorrelations
-  a <- acf(mod_ti@nuisance$ti_l0-mod_ti@fitted,plot = F) #mod_ti@fitted #mod_ti$model$ti_l0-mod_ti$fitted.values
-  inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-  a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = F)
-  inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-  a <- acf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,plot = T)
-  inc_tsupply <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-
-  score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
-    -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
-        q_diff*inc_q*4*(1+params["mod_hp_cons_ar"]*0.1) + 
-        tsupply_diff*inc_tsupply*6*(1+params["mod_tsupply_ar"]*0.1) )# * (
-  #(sum(pval_q,pval_ti,pval_tsupply)/3) #mean(pval_q,pval_ti,pval_tsupply)   )
-  
-  if (is.finite(score)){
-    return(score)#-weighted.mean(,c(0.6,0.6,0.4)))
-  } else {return(-10000000000000)}
-}
-
-
-all_penalties <- function(penaltyy, mod_q, mod_tsupply, df, val_dates, params, horizon){
-  
-  # library(foreach)
-  # # library(doSNOW)
-  # # library(Rmpi)
-  # #setup parallel backend to use many processors
-  # cores=detectCores()
-  # cl <- makeCluster(cores[1]-1) #not to overload your computer
-  # registerDoParallel(cl)
-  # # registerDoSNOW(cl)
-  # cl <- parallel::makeCluster(2)
-  # doParallel::registerDoParallel(cl)
-  
-  for (i in 1:length(penaltyy$L1)) { #foreach(i=1:length(penaltyy$L1), .combine= 'c', .packages = "penalized") %dopar% { #
-    penalty <- c(penaltyy[i,"L1"], penaltyy[i,"L2"])
-    names(penalty) <- c("L1", "L2")
-    result_ti <- calculate_model_ti(params, df, train_dates_1, output="model", penalty = penalty)
-    mod_ti <- result_ti$mod
-    
-    predv <- prediction_scenario(
-      mod_q = mod_q, 
-      mod_ti = mod_ti,
-      mod_tsupply = mod_tsupply,
-      df = df,
-      rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,
-      hp_tset_24h = ifelse(df$hp_status==0,NA,df$hp_tset),
-      params = params,
-      ts_prediction = NULL,
-      horizon = horizon
-    )
-    
-    # Accuracy indoor temperature and consumption
-    q_diff <- rmserr(predv$hp_cons[is.finite(predv$hp_cons) & predv$hp_cons>0],
-                     predv$hp_cons_l0[is.finite(predv$hp_cons) & predv$hp_cons>0])$rmse
-    ti_diff <- rmserr(predv$ti[is.finite(predv$ti)],predv$ti_l0[is.finite(predv$ti)])$rmse
-    tsupply_diff <- rmserr(predv$tsupply[is.finite(predv$tsupply)],predv$tsupply_l0[is.finite(predv$tsupply)])$rmse
-    
-    # # Autocorrelations
-    a <- acf(mod_ti@nuisance$ti_l0-mod_ti@fitted,plot = F) #mod_ti@fitted #mod_ti$model$ti_l0-mod_ti$fitted.values
-    inc_ti <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_q$model$hp_cons_l0-mod_q$fitted.values,plot = F)
-    inc_q <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    a <- acf(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values,plot = T)
-    inc_tsupply <- 1 + sum(abs(as.numeric(a$acf)[abs(as.numeric(a$acf)[2:length(a$acf)])>qnorm((1 + 0.95)/2)/sqrt(a$n.used)])-qnorm((1 + 0.95)/2)/sqrt(a$n.used))
-    
-    score <- #- q_total_diff*inc_q - ti_diff*inc_ti - (mod_ti_te+mod_ti_value+mod_q_dte+mod_q_dti+mod_q_te)# inc_ti * inc_q
-      -(ti_diff*inc_ti*10*(1+params["mod_ti_ar"]*0.1) +
-          q_diff*inc_q*4*(1+params["mod_hp_cons_ar"]*0.1) + 
-          tsupply_diff*inc_tsupply*6*(1+params["mod_tsupply_ar"]*0.1) )
-    penaltyy[i,"score"] <- score
-  }
-  # parallel::stopCluster(cl)
-  # stopCluster(cl)
-  return(penaltyy)
-}

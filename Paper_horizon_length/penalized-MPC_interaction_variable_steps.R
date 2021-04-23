@@ -5,7 +5,7 @@
 # MPCsubex1
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Use of penalized()/penalized-functions.R")
+source("Paper_horizon_length/penalized-functions.R")
 
 # Libraries for mathematics
 library(expm)
@@ -20,6 +20,7 @@ library(extrafont)
 library(reshape2)
 library(plotly)
 loadfonts()
+library(scales)
 
 # Libraries for data wrangling
 library(padr)
@@ -79,10 +80,10 @@ df_weather <- data.frame(
 df_house$vent_status <- kmeans(df_house$vent, 3)$cluster
 # df_house$vent <- house2$total_VFR[1:1053]
 df <- merge(df_house,df_weather)
-# saveRDS(df, file = "Use of penalized()/df.rds")
+# saveRDS(df, file = "Paper_horizon_length/df.rds")
 
 #take the new_df
-df <- readRDS("Use of penalized()/df_new.rds")
+df <- readRDS("Paper_horizon_length/df_new.rds")
 
 # df <- df[-1,]
 
@@ -204,7 +205,7 @@ names(params) <- names(features)
 
 
 #Load the already optimized parameters
-params <- readRDS("Use of penalized()/params_bo")
+params <- readRDS("Paper_horizon_length/params_bo")
 params["mod_ti_ar"]<-3 #2
 params["mod_ti_lags_hg"]<-5 #4
 
@@ -227,7 +228,7 @@ result_tsupply <- calculate_model_tsupply(params, df, train_dates, output="model
 mod_tsupply <- result_tsupply$mod
 
 ####################################### PENALTY lambdas #########################################################
-source("Use of penalized()/Liada/penalized-functions.R")
+source("Paper_horizon_length/Liada/penalized-functions.R")
 
 penalties <- list("L1"=list(min=0,max=0.5,n=5,class="float"),
                   "L2"=list(min=0,max=0.5,n=5,class="float"))
@@ -388,19 +389,22 @@ grid.arrange(
   ncol=1
 )
 
+horizon <- 24
 # Building free floating behaviour
-df__ <- df
+df__ <- df_initaial
 df__$hg <- 0
 df__$air_h <- 0
 df__$BHI <- 0
-df__$ti <- 10
+df__$hp_status <- 0
+df__$hp_tset <- 0
+df__$ti <- 15
 predv_ff <- prediction_scenario(
   mod_q = mod_q, 
   mod_ti = mod_ti,
   mod_tsupply = mod_tsupply,
   mod_cop = mod_cop,
   df = df__, #df
-  rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,#val_dates,
+  rows_to_filter = as.Date(df$time,"Europe/Madrid") %in% val_dates,#val_dates,eligible_dates[-length(eligible_dates)]
   hp_tset_24h = rep(45,nrow(df)),
   params = params,
   ts_prediction = NULL,
@@ -408,14 +412,14 @@ predv_ff <- prediction_scenario(
   set_seed = sample(10000,size = 1)
 )
 grid.arrange(
-  ggplot(predv_ff)+
-    geom_line(aes(time,tsupply))+
-    geom_line(aes(time,tsupply_l0),col=2)+
-    #geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
-    ylab("Supply temperature [ÂºC]")+
-    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
-    scale_x_datetime(date_breaks = "4 hours" , date_labels = "%H:%M") +
-    theme_bw()+ theme(axis.text.x=element_text(angle = 60,hjust=1)),
+  # ggplot(predv_ff)+
+  #   geom_line(aes(time,tsupply))+
+  #   geom_line(aes(time,tsupply_l0),col=2)+
+  #   #geom_point(aes(time,ifelse(hp_status_l0>0,hp_tset_l0,NA)),col=3)+
+  #   ylab("Supply temperature [ÂºC]")+
+  #   facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+  #   scale_x_datetime(date_breaks = "4 hours" , date_labels = "%H:%M") +
+  #   theme_bw()+ theme(axis.text.x=element_text(angle = 60,hjust=1)),
   ggplot(predv_ff)+
     geom_line(aes(time,ti))+
     geom_line(aes(time,ti_l0),col=2)+
@@ -427,13 +431,238 @@ grid.arrange(
     geom_line(aes(time,hp_cons))+
     geom_line(aes(time,hp_cons_l0),col=2)+
     ylab("HP electricity [Wh]")+
-    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") + 
+    facet_wrap(~as.factor(ts_prediction),nrow=1,scales="free_x") +
     scale_x_datetime(date_breaks = "4 hours" , date_labels = "%H:%M") +
     theme_bw()+ theme(axis.text.x=element_text(angle = 60,hjust=1)),
   ncol=1
 )
 # rm(df__)
 # rm(predv_ff)
+
+######################################################### Optimal horizon #########################################################
+
+#Create a fake dataset in which is computed the time needed to reach a temperature (hot_temp)
+#from a low temperature (initial_temp) with full power (hp_tset = 45ºC)
+
+h1 <- 50 #lags before simulation (needed later for shifting)
+h2 <- 100 #simulation iterations
+initial_temp <- 15 #initial temperature
+hot_temp <- 20 #target temperature
+df_fake <- data.frame("time" = df$time[299:(299+h1+h2-1)],
+                      "hp_cons" = c(rep(0, h1),rep(NA, h2)),
+                      "hp_status" = c(rep(0, h1),rep(1, h2)),
+                      "hp_tset" = c(rep(0, h1),rep(45, h2)),
+                      "hp_cop" = c(rep(0, h1),rep(NA, h2)),
+                      "hp_thermal" = c(rep(0, h1),rep(NA, h2)),
+                      "tsupply" = c(rep(0, h1),rep(45, h2)),
+                      "ti" = c(rep(initial_temp, h1),rep(NA, h2)),
+                      "hg" = rep(0, h1+h2),
+                      "te" = rep(-15, h1+h2),
+                      "BHI" = rep(0, h1+h2),
+                      "GHI" = rep(0, h1+h2),
+                      "sunAz" = rep(20, h1+h2),
+                      "windSpeed" = rep(0, h1+h2),
+                      "vent" = rep(0, h1+h2),
+                      "vent_status" = rep(0, h1+h2),
+                      "humidity" = rep(0, h1+h2),
+                      "windBearing" = rep(0, h1+h2),
+                      "air_h" = rep(0, h1+h2),
+                      "iteration" = c((1-h1):h2)
+                      )
+#iteration to compute the increase of temperature timestep by timestep
+for (i in 1:(h2)) {
+  df_fake_ <- tune_model_input(df_fake,params) #tune the df to have all the lags
+  df_fake_ <- df_fake_[h1+i,] #Cut the df to the only iteration computed each loop
+  df_fake$hp_status[h1+i] <- df_fake_$hp_status_l0
+  df_fake$tsupply[h1+i] <- df_fake_$tsupply_l0 <- 45
+  df_fake$hp_cons[h1+i] <- df_fake_$hp_cons_l0 <- predict(mod_q, df_fake_)
+  df_fake$hp_cop[h1+i] <- df_fake_$hp_cop_l0 <- predict(mod_cop, df_fake_)
+  df_fake$hp_thermal[h1+i] <- df_fake_$hp_thermal_l0 <- df_fake_$hp_cons_l0*df_fake_$hp_cop_l0
+  df_fake$ti[h1+i] <- df_fake_$ti_l0 <- (model.matrix(mod_ti@nuisance$formula, 
+                                                      df_fake_)[,colnames(model.matrix(mod_ti@nuisance$formula, df_fake_)) %in%
+                                                                  names(coef(mod_ti))] %*% coef(mod_ti))
+}
+rm(df_fake_)
+
+#is taken the instant before and after crossing and aproximate it to a line to get the exact time of crossing (to draw it in the plot)
+a <- df_fake$ti[df_fake$ti>hot_temp][1] #temp before crossing
+a[2] <- tail(df_fake$ti[df_fake$ti<hot_temp], 1) #temp after corssing
+time_heating <- ((nrow(df_fake[df_fake$ti<hot_temp,]))*60 + round((hot_temp-a[2])/(a[1]-a[2])*60)) #time to reach the temperature (minutes)
+
+#time of heating in hours (iterations needed)
+hours_heating <- ceiling(time_heating/60)-h1 
+hours_heating
+
+#Heating curve plot
+ggplotly(
+  ggplot(df_fake[10:nrow(df_fake),]) +
+    geom_line(aes(x = iteration, y = ti)) +
+    geom_hline(yintercept = hot_temp, linetype="dashed", color = 2) +
+    geom_point(aes(x = (df_fake$iteration[1] + (time_heating-60)/60), y = hot_temp), size = 5, color = 2, shape = 4, stroke = 1) +
+    xlab("Time[hours]") + ylab("Ti[ºC]")
+)
+
+c1 <- 50 #lags before simulation
+c2 <- 100 #sumulation iterations
+initial_temp <- 20 #initial temperature
+cold_temp <- 15 #Minimum temperature allowed night setback
+df_fake_cold <- data.frame("time" = df$time[299:(299+c1+c2-1)],
+                      "hp_cons" = c(rep(0, c1),rep(NA, c2)),
+                      "hp_status" = c(rep(0, c1),rep(0, c2)),
+                      "hp_tset" = c(rep(0, c1),rep(0, c2)),
+                      "hp_cop" = c(rep(0, c1),rep(NA, c2)),
+                      "hp_thermal" = c(rep(0, c1),rep(NA, c2)),
+                      "tsupply" = c(rep(0, c1),rep(45, c2)),
+                      "ti" = c(rep(initial_temp, c1),rep(NA, c2)),
+                      "hg" = rep(0, c1+c2),
+                      "te" = rep(-15, c1+c2),
+                      "BHI" = rep(0, c1+c2),
+                      "GHI" = rep(0, c1+c2),
+                      "sunAz" = rep(20, c1+c2),
+                      "windSpeed" = rep(0, c1+c2),
+                      "vent" = rep(0, c1+c2),
+                      "vent_status" = rep(0, c1+c2),
+                      "humidity" = rep(0, c1+c2),
+                      "windBearing" = rep(0, c1+c2),
+                      "air_h" = rep(0, c1+c2),
+                      "iteration" = c((1-c1):c2)
+)
+
+#iteration to compute the decrease of temperature timestep by timestep (free floating)
+for (i in 1:(c2)) {
+  df_fake_ <- tune_model_input(df_fake_cold,params)
+  df_fake_ <- df_fake_[c1+i,]
+  df_fake_cold$hp_status[c1+i] <- df_fake_$hp_status_l0 <- 0
+  df_fake_cold$hp_cons[c1+i] <- df_fake_$hp_cons_l0 <- 0
+  df_fake_cold$tsupply[c1+i] <- df_fake_$tsupply_l0 <- predict(mod_tsupply, df_fake_)
+  df_fake_cold$hp_cop[c1+i] <- df_fake_$hp_cop_l0 <- 0
+  df_fake_cold$hp_thermal[c1+i] <- df_fake_$hp_thermal_l0 <- df_fake_$hp_cons_l0*df_fake_$hp_cop_l0
+  df_fake_cold$ti[c1+i] <- df_fake_$ti_l0 <- (model.matrix(mod_ti@nuisance$formula, 
+                                                      df_fake_)[,colnames(model.matrix(mod_ti@nuisance$formula, df_fake_)) %in%
+                                                                  names(coef(mod_ti))] %*% coef(mod_ti))
+}
+rm(df_fake_)
+
+#is taken the instant before and after crossing and aproximate it to a line to get the exact time of crossing (to draw it in the plot)
+a <- df_fake_cold$ti[df_fake_cold$ti<cold_temp][1] #temp before crossing
+a[2] <- tail(df_fake_cold$ti[df_fake_cold$ti>cold_temp], 1) #temp after corssing
+#time in minutes to reach the minimum allowed temperature
+time_ff <- ((nrow(df_fake_cold[df_fake_cold$ti>cold_temp,]))*60 + ((1-(cold_temp-a[1])/(a[2]-a[1]))*60))
+
+#time of free floating in hours to reach the minumum temp. (iterations needed)
+hours_ff <- ceiling(time_ff/60)-c1
+hours_ff
+
+#Plot of the temperature decay
+ggplotly(
+  ggplot(df_fake_cold[10:nrow(df_fake_cold),]) +
+    geom_line(aes(x = iteration, y = ti)) +
+    geom_hline(yintercept = cold_temp, linetype="dashed", color = 2) +
+    geom_point(aes(x = (df_fake_cold$iteration[1] + (time_ff-60)/60), y = cold_temp), size = 5, color = 2, shape = 4, stroke = 1) +
+    xlab("Time[hours]") + ylab("Ti[ºC]")
+)
+
+#Once the free floating and the heating curve are generated now is time to compute the night setback horizon
+#There are 3 possibilities
+# 1.- Optimal horizon larger than setback (is taken the optimal horizon)
+# 2.- The building reaches the lower temperature (is taken the time to heat + opt. horizon)
+# 3.- The bulding dosn't reach the minimum temp (is taken the time between the line corssing and the end of setback + opt. horizon)
+
+
+horizon_optim <- 7 #horizon from the ARX lags
+setback <- 10 #time of setback
+# The heating curve is moved in order to reach the target temp at the end of the  setback
+df_fake_g <- df_fake[((h1+1) - setback + hours_heating):nrow(df_fake),]
+df_fake_g$iteration <- c(1:nrow(df_fake_g))
+#The free floating curve is moved to start at zero
+df_fake_cold_g <- df_fake_cold[(c1+0):nrow(df_fake_cold),]
+
+#Time between the curves cross and the end of setback
+hours_heating_from_cooling <- setback - (df_fake_g$iteration[df_fake_cold_g$ti[1:(nrow(df_fake_g))]<df_fake_g$ti][1]-1-1) #-1 for counting the iteration before the crossing
+                                                                                                                          #segond -1 for counting the "zero"
+#Decision tree of whitch horizon to take in night setback
+min_horizon <- max(horizon_optim, min(setback, horizon_optim+hours_heating, hours_heating_from_cooling + horizon_optim))
+#Summary of the horizon decission parameters
+paste("the free floating time is:", hours_ff)
+paste("the heating time is:", hours_heating)
+paste("the setback time is:", setback)
+paste("the optimal horizon is:", horizon_optim)
+paste("min horizon in night setback is:", min_horizon)
+
+#Plot of the two curves to see it's interactions
+ggplotly(
+  ggplot() +
+    geom_line(aes(x = df_fake_g$iteration, y = df_fake_g$ti), color = 2) +
+    # geom_hline(yintercept = hot_temp, linetype="dashed", color = 2) +
+    # geom_point(aes(x = ((-h1+1+setback-hours_heating) + (time_heating-60)/60), y = hot_temp), size = 5, color = 2, shape = 4, stroke = 1) +
+    geom_line(aes(x = df_fake_cold_g$iteration, y = df_fake_cold_g$ti), color = 4, linetype = "dotted") +
+    geom_line(aes(x = c(0, 0, setback-1, setback, setback, setback+1), y = c(hot_temp, cold_temp, cold_temp, cold_temp, hot_temp, hot_temp)),
+              linetype = "dashed") +
+    # geom_hline(yintercept = cold_temp, linetype="dashed", color = 4) +
+    # geom_point(aes(x = ((-c1+1) + (time_ff-60)/60), y = cold_temp), size = 5, color = 4, shape = 4, stroke = 1) +
+    # geom_vline(xintercept = setback, linetype = "dashed", show.legend = T) +
+    xlab("Time[hours]") + xlim(0, setback+1) + ylab("Ti[ºC]") + ylim(cold_temp-0, hot_temp+0.5) 
+    #theme(legend.box = "vertical", legend.position = "bottom") + labs(colour = color) +
+    # theme(legend.text	= c("heateing curve", "free floating curve",))
+)
+
+#Figure for paper
+l_size = 1.2
+ggplot() +
+  geom_line(aes(x = df_fake_g$iteration+0.4, y = df_fake_g$ti, color = "Heating", linetype = "Heating"), size = l_size) +
+  geom_line(aes(x = df_fake_cold_g$iteration, y = df_fake_cold_g$ti, color = "Free floating", linetype = "Free floating"), size = l_size) +
+  geom_line(aes(x = c(0, 0, setback-1, setback, setback, setback+1), y = c(hot_temp, cold_temp, cold_temp, cold_temp, hot_temp, hot_temp), 
+                color = "Min. temp. setpoint", linetype = "Min. temp. setpoint"), size = l_size) +
+  xlab("Time[hours]") + scale_x_continuous(breaks = seq(from = 0, to = 12, by = 2), limits = c(0, setback+1)) + # + xlim(0, setback+2)
+  ylab(expression("T"^"i"~"[ºC]")) + ylim(cold_temp-0, hot_temp+0.3) + #ylab("Ti[ºC]")
+  scale_color_manual(values = c("Free floating" = "blue", "Heating" = "red", "Min. temp. setpoint" = "grey50"), name = "A") +
+  scale_linetype_manual(values = c("Free floating" = "dotted", "Heating" = "solid", "Min. temp. setpoint" = "dashed"), name = "A") +
+  geom_segment(aes(x = 7.5, y = 18.85, xend = setback-0.1, yend = 18.85), size = 1.3, arrow = arrow(length = unit(0.25, "cm"), ends = "both")) +
+  annotate("text", x=8.9, y=19.1, label= expression("h"["cross"]), size = 6) +
+  # scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+  theme_classic()+
+  theme(legend.title = element_blank(), legend.position = c(0.65,0.25), text = element_text(size=14, colour = "black"),
+        legend.key.width=unit(2, "line"), 
+        axis.ticks.length=unit(-0.15, "cm"),
+        axis.text.x = element_text(margin = unit(c(t = 3.5, r = 0, b = 0, l = 0), "mm"), size=14, color="black"),
+        axis.text.y = element_text(margin = unit(c(t = 0, r = 3.5, b = 0, l = 0), "mm"), size=14, color="black")
+        )
+#legend.text = element_text(size = 13)
+
+
+setback <- 20:1
+horizon_optim <- 5
+hours_heating <- 10
+hours_heating_from_cooling <- 12
+min_horizon <- {}
+for (i in 1:length(setback)) {
+  min_horizon[i] <- max(horizon_optim, min(setback[i], horizon_optim+hours_heating, hours_heating_from_cooling + horizon_optim))
+}
+
+ggplot() +
+  geom_line(aes(x = 1:20, y = min_horizon, color = "hop", linetype = "hop"), size = (l_size)) +
+  geom_line(aes(x = 1:20, y = setback, color = "setback", linetype = "setback"), size = l_size) +
+  geom_line(aes(x = 1:20, y = rep(horizon_optim,20), color = "hlag", linetype = "hlag"), size = l_size) +
+  geom_line(aes(x = 1:20, y = rep(horizon_optim+hours_heating,20), color = "hlag", linetype = "hlag"), size = l_size) +
+  xlab("Time in setback[h]") + #scale_x_continuous(breaks = seq(from = 0, to = 12, by = 2), limits = c(0, setback+1)) + # + xlim(0, setback+2)
+  ylab(expression("horizon[h]")) + #+ ylim(cold_temp-0, hot_temp+0.3) + #ylab("Ti[ºC]")
+  scale_color_manual(values = c("hop" = "black", "setback" = "red", "hlag" = "grey50"), name = "A") +
+  scale_linetype_manual(values = c("hop" = "solid", "setback" = "longdash", "hlag" = "dotdash"), name = "A") +
+  annotate("text", x=5, y=6, label= expression("h"["lag"]), size = 6) +
+  annotate("text", x=14, y=16, label= expression("min(h"["lag"]+"h"["heat"]~", h"["lag"]+"h"["cross"]~")"), size = 6) +
+  theme_classic()+
+  theme(legend.title = element_blank(), legend.position = c(0.85,0.55), text = element_text(size=14, colour = "black"),
+        legend.key.width=unit(3, "line"), 
+        axis.ticks.length=unit(-0.15, "cm"),
+        axis.text.x = element_text(margin = unit(c(t = 3.5, r = 0, b = 0, l = 0), "mm"), size=14, color="black"),
+        axis.text.y = element_text(margin = unit(c(t = 0, r = 3.5, b = 0, l = 0), "mm"), size=14, color="black")
+  )
+
+
+
+
+
+
 
 ######################################################### Compute R2 of ti#########################################################
 
@@ -477,21 +706,29 @@ R2_df_ti <- 1-sum((ti_df-ti_l0_df)^2)/sum((ti_df-mean(ti_df))^2)
 R2_df_ti
 error_ti <- ti_df-ti_l0_df
 max(abs(error_ti))
+CVRMSE_ti <- sqrt(sum((ti_df-ti_l0_df)^2)/length(ti_df))/mean(ti_df)*100
+CVRMSE_ti
 
 R2_df_tsup <- 1-sum((tsupply_df-tsupply_l0_df)^2)/sum((tsupply_df-mean(tsupply_df))^2)
 R2_df_tsup
 error_tsup <- tsupply_df-tsupply_l0_df
 max(abs(error_tsup))
+CVRMSE_tsup <- sqrt(sum((tsupply_df-tsupply_l0_df)^2)/length(tsupply_df))/mean(tsupply_df)*100
+CVRMSE_tsup
 
 R2_df_cop <- 1-sum((cop_df-cop_l0_df)^2)/sum((cop_df-mean(cop_df))^2)
 R2_df_cop
 error_cop <- cop_df-cop_l0_df
 max(abs(error_cop))
+CVRMSE_cop <- sqrt(sum((cop_df-cop_l0_df)^2)/length(cop_df))/mean(cop_df)*100
+CVRMSE_cop
 
 R2_df_hp_cons <- 1-sum((hp_cons_df-hp_cons_l0_df)^2)/sum((hp_cons_df-mean(hp_cons_df))^2)
 R2_df_hp_cons
 error_hp_cons <- hp_cons_df-hp_cons_l0_df
 max(abs(error_hp_cons))
+CVRMSE_hp_cons <- sqrt(sum((hp_cons_df-hp_cons_l0_df)^2)/length(hp_cons_df))/mean(hp_cons_df)*100
+CVRMSE_hp_cons
 
 
 cop_df_MAPE <- cop_df
@@ -510,6 +747,10 @@ MAPE_df_ti_ <- {}
 MAPE_df_tsup_ <- {}
 MAPE_df_cop_ <- {}
 MAPE_df_cons_ <- {}
+CVRMSE_ti_ <- {}
+CVRMSE_tsup_ <- {}
+CVRMSE_cop_ <- {}
+CVRMSE_hp_cons_ <- {}
 for (i in 1:horizon) {
   forecast_horit <- i
   R2_df_ti_[i] <- 1-sum((ti_df[seq(forecast_horit, length(ti_df), horizon)]-ti_l0_df[seq(forecast_horit, length(ti_l0_df), horizon)])^2)/
@@ -532,6 +773,12 @@ for (i in 1:horizon) {
   MAPE_df_cons_[i] <- sum(abs(hp_cons_df_MAPE[seq(forecast_horit, length(hp_cons_df), horizon)]-hp_cons_l0_df_MAPE[seq(forecast_horit, length(hp_cons_l0_df), horizon)])/
                            abs(hp_cons_df_MAPE[seq(forecast_horit, length(hp_cons_df), horizon)]), na.rm = T)/sum(!(is.na(hp_cons_df_MAPE[seq(forecast_horit, length(hp_cons_df), horizon)])))
   
+  sqrt(sum((hp_cons_df-hp_cons_l0_df)^2)/length(hp_cons_df))/mean(hp_cons_df)*100
+  
+  CVRMSE_ti_[i] <- sqrt(sum((ti_df[seq(forecast_horit, length(ti_df), horizon)]-ti_l0_df[seq(forecast_horit, length(ti_l0_df), horizon)])^2)/length(ti_df[seq(forecast_horit, length(ti_df), horizon)]))/mean(ti_df[seq(forecast_horit, length(ti_df), horizon)])*100
+  CVRMSE_tsup_[i] <- sqrt(sum((tsupply_df[seq(forecast_horit, length(tsupply_df), horizon)]-tsupply_l0_df[seq(forecast_horit, length(tsupply_l0_df), horizon)])^2)/length(tsupply_df[seq(forecast_horit, length(tsupply_df), horizon)]))/mean(tsupply_df[seq(forecast_horit, length(tsupply_df), horizon)])*100
+  CVRMSE_cop_[i] <- sqrt(sum((cop_df[seq(forecast_horit, length(cop_df), horizon)]-cop_l0_df[seq(forecast_horit, length(cop_l0_df), horizon)])^2)/length(cop_df[seq(forecast_horit, length(cop_df), horizon)]))/mean(cop_df[seq(forecast_horit, length(cop_df), horizon)])*100
+  CVRMSE_hp_cons_[i] <- sqrt(sum((hp_cons_df[seq(forecast_horit, length(hp_cons_df), horizon)]-hp_cons_l0_df[seq(forecast_horit, length(hp_cons_l0_df), horizon)])^2)/length(hp_cons_df[seq(forecast_horit, length(hp_cons_df), horizon)]))/mean(hp_cons_df[seq(forecast_horit, length(hp_cons_df), horizon)])*100
 }
 
 R2_df_ti_
@@ -573,6 +820,26 @@ plot(MAPE_df_cop_*100)
 plot(MAPE_df_cons_*100)
 
 
+CVRMSE_ti
+CVRMSE_ti_
+plot(CVRMSE_ti_)
+
+CVRMSE_tsup
+CVRMSE_tsup_
+plot(CVRMSE_tsup_)
+
+CVRMSE_cop
+CVRMSE_cop_
+plot(CVRMSE_cop_)
+
+CVRMSE_hp_cons
+CVRMSE_hp_cons_
+plot(CVRMSE_hp_cons_)
+
+
+
+
+
 val_dates
 
 # ggplot(data.frame(ti_df=ti_df,ti_l0_df=ti_l0_df,ii_df=ii_df))+geom_point(aes(ti_df,ti_l0_df)) + facet_wrap(~ii_df)
@@ -593,35 +860,10 @@ max(ti_df_1 - df$ti[df$time>=as.POSIXct(x = "2018-12-19 23:00:00 UTC", tz = "UTC
 ######################################################### SIMULATION INICIALIZATION #########################################################
 # df_initaial <- df
 df <- df_initaial
-horizon <- 10
-
-# Constrains:
-# max and min range (comfort bands) for ti defined based on the time of the day
-# Thermal comfort band: 20-24 during the day (7:00 to 23:00)
-#                       18-22 during the night (23:00 to 7:00)
-# ti_min = c(rep(x = 18, times = 7), rep(x = 20, times = 24-7))
-# ti_max = c(rep(x = 22, times = 7), rep(x = 24, times = 24-7))
-ti_min <- {}
-ti_max <- {}
-for (i in 1:nrow(df)) {
-  if (hour(df$time[i])>=7) {
-    ti_min[i] <- 20
-  } else {ti_min[i] <- 18}
-  if (hour(df$time[i])>=7) {
-    ti_max[i] <- 24
-  } else {ti_max[i] <- 22}
-}
-df$ti_min <- ti_min
-df$ti_max <- ti_max
-
-df$ti_min[df$time>=as.POSIXct(x = "2018-12-31 12:00:00 UTC", tz = "UTC")
-          & df$time<=as.POSIXct(x = "2019-01-02 11:00:00 UTC", tz = "UTC")] <- 15
-df$ti_max[df$time>=as.POSIXct(x = "2018-12-31 12:00:00 UTC", tz = "UTC")
-          & df$time<=as.POSIXct(x = "2019-01-02 11:00:00 UTC", tz = "UTC")] <- 22
-
+horizon <- 8
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Use of penalized()/penalized-functions.R")
+source("Paper_horizon_length/penalized-functions.R")
 
 # The output should be the prediction of the optimum heat pump's status (ON/OFF) and set point temperature 
 # for the next 24 hours (both parameters are saved in the vector: params_hp_tset_24h). 
@@ -631,9 +873,6 @@ df_price <- read_excel_allsheets("data/electricity_price.xlsx")$Sheet1
 colnames(df_price) <- c("daytime", "price")
 df_price$daytime <- c(0:23)
 price <- df_price$price
-
-#To take the forward X hours temperature boundaries/prices are needed 2 days
-price_3days = c(price, price, price)
 
 # source("C:/Users/gerar/Desktop/Config entrenament/df_866-df2900/functions.R")
 
@@ -663,7 +902,7 @@ suggestions = decodeBinFromValue(values = params_hp_tset_24h, class_per_feature 
 # suggestions[8] <- 0
 
 # Initialize the time to predict, for example: (took a date inside val_dates: (2019-01-23 : 2019-02-01))
-time_to_predict <- as.POSIXct(x = "2018-12-31 12:00:00 UTC", tz = "UTC")#(x = "2018-12-19 23:00:00 UTC", tz = "UTC") #Time the MPC starts
+time_to_predict <- as.POSIXct(x = "2018-12-29 10:00:00 UTC", tz = "UTC")#(x = "2018-12-19 23:00:00 UTC", tz = "UTC") #Time the MPC starts
 time_to_predict_step <- as.POSIXct(x = "2018-12-19 14:00:00 UTC", tz = "UTC")#(x = "2018-12-19 14:00:00 UTC", tz = "UTC") #Start time of Modelica
 delay <- as.numeric(difftime(time_to_predict, time_to_predict_step, units = "hours")) #Hours thet Modelica will run without MPC
 
@@ -692,6 +931,17 @@ vr_output1 <- simulation[[4]]
 vr_output2 <- simulation[[5]]
 
 ######################################################### LOOP Before MPC #########################################################
+# Constrains:
+# max and min range (comfort bands) for ti defined based on the time of the day
+# Thermal comfort band: 20-24 during the day (7:00 to 23:00)
+#                       18-22 during the night (23:00 to 7:00)
+ti_min = c(rep(x = 18, times = 7), rep(x = 20, times = 24-7)) 
+ti_max = c(rep(x = 22, times = 7), rep(x = 24, times = 24-7)) 
+
+#To take the forward X hours temperature boundaries/prices are needed 2 days
+ti_min_3days = c(ti_min, ti_min, ti_min)
+ti_max_3days = c(ti_max, ti_max, ti_max)
+price_3days = c(price, price, price)
 
 df_result <- data.frame({})
 
@@ -714,10 +964,13 @@ if (delay!=0) {
       #Inside temperature at time to predict +1 due to the effect of use the energy between time to predict and time to predict +1
       df$ti[df$time == time_to_predict_step- hours(1)] = sum(df_result_20s$Temp_aver[(i-(3600/step_size)):(i-1)])/(3600/step_size)
       
+      Tsup_optim <- df$hp_tset[df$time==time_to_predict_step]
+      HPs_optim <- df$hp_status[df$time==time_to_predict_step]
+      
       df_result <- rbind(df_result, data.frame("time_to_predict_step" = time_to_predict_step - hours(1),
                                                "time" = time - 3600,
-                                               "Tsup_optim" = Tsup_optim,
-                                               "HPs_optim" = HPs_optim, 
+                                               "Tsup_optim" = df$hp_tset[df$time==time_to_predict_step - hours(1)],
+                                               "HPs_optim" = df$hp_status[df$time==time_to_predict_step - hours(1)], 
                                                "Temp_aver" = df$ti[df$time == time_to_predict_step - hours(1)],
                                                "hp_el" = df$hp_cons[df$time==time_to_predict_step - hours(1)],
                                                "cost" = sum(df_result_20s$cost[(i-(3600/step_size)):(i)]),
@@ -728,15 +981,7 @@ if (delay!=0) {
                                                "MPC_fitnessValue" = NA,
                                                "tin_Data_Driven" = NA,
                                                "hp_el_Data_Driven" = NA))
-      
-      Tsup_optim <- df$hp_tset[df$time==time_to_predict_step]
-      if (time_to_predict_step <= as.POSIXct(x = "2018-12-25 12:00:00 UTC", tz = "UTC")) {
-        HPs_optim <- df$hp_status[df$time==time_to_predict_step]
-      } else {df$hp_status[df$time==time_to_predict_step] <- HPs_optim <- 0}
-      
-      }
-    
-
+    }
     
     #Modelica simulation
     step <- Iteration(fmu, vr_input1, vr_input2, vr_output1, vr_output2, time, step_size, Tsup_optim, HPs_optim)
@@ -767,6 +1012,10 @@ if (delay!=0) {
   }
 }
 
+#initialize the COP variable for the iterations in the main MPC loop
+hp_cop <- df$hp_cop[df$time == time_to_predict_step - hours(1)]
+hp_tsupply <- df$tsupply[df$time == time_to_predict_step - hours(1)]
+
 # print(df_result)
 #initialize fata frames to have a controll of what have it done the MPC
 df_sol_time <- data.frame({})
@@ -789,7 +1038,7 @@ optimization_results_MPC <- new("GA", "fitnessValue" = 0)
 # max_time = 31676400 #Modelica max time
 # n_steps =1
 # max_time = time + step_size*(n_steps-1) + 10
-max_time = as.numeric(seconds(as.POSIXct(x = "2019-01-03 01:00:00 UTC", tz = "UTC")) -
+max_time = as.numeric(seconds(as.POSIXct(x = "2019-01-13 01:00:00 UTC", tz = "UTC")) - #as.numeric(seconds(as.POSIXct(x = "2019-01-13 00:00:00 UTC", tz = "UTC"))
                         seconds(as.POSIXct(x = "2018-12-19 14:00:00 UTC", tz = "UTC"))) + 30463200
 
 # time_to_predict_step <- as.POSIXct(x = "2019-01-02 22:00:00", tz = "UTC")
@@ -802,10 +1051,8 @@ while (time <= max_time) { #<=
   #Every hour update the historical data and run the GA
   if (time%%3600 == 0) {
     #Temp limits and price for each hour forecast
-    ti_min = df$ti_min[df$time>=time_to_predict_step & df$time<=(time_to_predict_step+hours(horizon-1))]
-              #ti_min_3days[(hour(time_to_predict_step)+1):(hour(time_to_predict_step)+horizon)]
-    ti_max = df$ti_max[df$time>=time_to_predict_step & df$time<=(time_to_predict_step+hours(horizon-1))]
-              #ti_max_3days[(hour(time_to_predict_step)+1):(hour(time_to_predict_step)+horizon)]
+    ti_min = ti_min_3days[(hour(time_to_predict_step)+1):(hour(time_to_predict_step)+horizon)]
+    ti_max = ti_max_3days[(hour(time_to_predict_step)+1):(hour(time_to_predict_step)+horizon)]
     price = price_3days[(hour(time_to_predict_step)+1):(hour(time_to_predict_step)+horizon)]
     
     #Update the historical data with the Modelica results applying the previous iteration
@@ -824,8 +1071,8 @@ while (time <= max_time) { #<=
                                              "cost" = sum(df_result_20s$cost[(length(df_result_20s$cost)-(3600/step_size)+1):(length(df_result_20s$cost))]),
                                              "Tcost" = Tcost,
                                              "price" = price_3days[(hour(time_to_predict_step - hours(1))+1)],#price[1]
-                                             "ti_min" = df$ti_min[df$time==time_to_predict_step- hours(1)],#ti_min_3days[(hour(time_to_predict_step - hours(1))+1)],#ti_min[1],
-                                             "ti_max" = df$ti_max[df$time==time_to_predict_step- hours(1)],#ti_max_3days[(hour(time_to_predict_step - hours(1))+1)],#ti_max[1]
+                                             "ti_min" = ti_min_3days[(hour(time_to_predict_step - hours(1))+1)],#ti_min[1],
+                                             "ti_max" = ti_max_3days[(hour(time_to_predict_step - hours(1))+1)],#ti_max[1]
                                              "MPC_fitnessValue" = optimization_results_MPC@fitnessValue,
                                              "tin_Data_Driven" = RETURN$predv.ti_l0[1],
                                              "hp_el_Data_Driven" = RETURN$predv.hp_cons_l0[1]))
@@ -872,7 +1119,7 @@ while (time <= max_time) { #<=
         horizon = horizon,
         suggestions = suggestions,
         keepBest = TRUE,
-        popSize = 500, #64
+        popSize = 400, #64
         maxiter = 20, #20
         monitor = gaMonitor2,
         parallel = "snow", #cl "snow"
@@ -974,9 +1221,9 @@ while (time <= max_time) { #<=
                                                    "Temp_aver" = output1, #The internal temperature is the one from the previous calculation 
                                                    "hp_el" = output2,
                                                    "cost" = cost,
-                                                   "ti_min" = df$ti_min[df$time==(time_to_predict_step-minutes(minute(time_to_predict_step)))],#ti_min_3days[(hour(time_to_predict_step)+1)],
-                                                   "ti_max" = df$ti_max[df$time==(time_to_predict_step-minutes(minute(time_to_predict_step)))] #ti_max_3days[(hour(time_to_predict_step)+1)]
-                                                    ))
+                                                   "ti_min" = ti_min_3days[(hour(time_to_predict_step)+1)],
+                                                   "ti_max" = ti_max_3days[(hour(time_to_predict_step)+1)]))
+  
   #Update time for next step
   time = time + step_size
   time_to_predict_step <- time_to_predict_step + seconds(step_size)
@@ -995,7 +1242,7 @@ df_sol <- data.frame(df_sol_time, df_sol_Tave, df_sol_Tset, df_sol_Text, df_cost
 Total_cost_BM <- df_result$Tcost[length(df_result$Tcost)-1]-df_result$Tcost[df_result$time_to_predict_step == as.POSIXct(x = "2018-12-19 18:00:00 UTC", tz = "UTC")]
 Total_cost_BM
 
-df_eval <- df_result[df_result$time_to_predict_step >= as.POSIXct(x = "2018-12-31 12:00:00 UTC", tz = "UTC") & df_result$time_to_predict_step <= as.POSIXct(x = "2019-01-02 23:00:00 UTC", tz = "UTC"),]
+df_eval <- df_result[df_result$time_to_predict_step >= as.POSIXct(x = "2018-12-30 00:00:00 UTC", tz = "UTC") & df_result$time_to_predict_step <= as.POSIXct(x = "2019-01-12 23:00:00 UTC", tz = "UTC"),]
 sum(df_eval$cost, na.rm = T)
 # END_fmu(fmu)
 
@@ -1021,7 +1268,7 @@ max(disconfort)
 sum(disconfort)
 hist(disconfort)
 disconfort <- disconfort[disconfort != 0]
-hist(disconfort)#, breaks = c(seq(from = 0, to = 0.25, by= 0.02)))
+hist(disconfort, breaks = c(seq(from = 0, to = 0.16, by= 0.02)))#, breaks = c(seq(from = 0, to = 0.25, by= 0.02)))
 sum(df_disconfort$hp_el*df_disconfort$price/1000000)
 
 plot(df_eval$time_to_predict_step,df_eval$Temp_aver-df_eval$tin_Data_Driven)
@@ -1072,16 +1319,124 @@ ggplotly(
     geom_line(aes(x = df_eval$time_to_predict_step, y = df_eval$price/3,  color = "green")) +
     geom_point(aes(x = df_eval$time_to_predict_step, y = df_eval$price/3)) +
     geom_point(aes(df_eval$time_to_predict_step, ifelse(df_eval$HPs_optim>0,df_eval$price/3,NA), color = "green")) +
-    geom_line(aes(df_eval$time_to_predict_step, (df_eval$Tsup_optim), color = "grey")) +
-    # geom_line(aes(df_eval$time_to_predict_step, (df$hg[df$time %in% df_eval$time_to_predict_step])))
+    geom_line(aes(df_eval$time_to_predict_step, (df_eval$Tsup_optim/4)+15, color = "grey"))
     # geom_line(aes(df_eval$time_to_predict_step, (df_eval$cost*50)+15, color = "cyan"))
-    ylab("Temperature (ºC)") + xlab("Date")
 )
 
-ggplotly(
-  ggplot(df) +
-    geom_line(aes(x=time,y=hg))
-)
+#Grafica Tin + boundaries
+l_size = 1.2
+ggplot(df_eval[df_eval$time_to_predict_step >= as.POSIXct(x = "2019-01-04 00:00:00 UTC", tz = "UTC") &
+                 df_eval$time_to_predict_step <= as.POSIXct(x = "2019-01-07 00:00:00 UTC", tz = "UTC"),]) +
+  geom_line(aes(x = time_to_predict_step, y = Temp_aver, color = "Tin", linetype = "Tin"), size = l_size) +
+  geom_line(aes(x = time_to_predict_step, y = ti_min, color = "Tmin", linetype = "Tmin"), size = l_size) +
+  geom_line(aes(x = time_to_predict_step, y = ti_max, color = "Tmax", linetype = "Tmax"), size = l_size) +
+  xlab("Time[hours]") + 
+  scale_x_datetime(labels = date_format("%m/%d %H:%M"), breaks = seq(from = as.POSIXct(x = "2019-01-04 00:00:00 UTC", tz = "UTC"),
+                                                                     to = as.POSIXct(x = "2019-01-07 00:00:00 UTC", tz = "UTC"),
+                                                                     by = 3600*6)) +
+  ylab(expression("T"~"[ºC]")) +
+  scale_color_manual(values = c("Tin" = "black", "Tmin" = "blue", "Tmax" = "red"), name = "A") +
+  scale_linetype_manual(values = c("Tin" = "solid", "Tmin" = "dotted", "Tmax" = "dashed"), name = "A") +
+    # scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+  theme_classic()+
+  theme(legend.title = element_blank(), legend.position = c(0.85,0.65), text = element_text(size=14, colour = "black"),
+        legend.key.width=unit(2, "line"), 
+        axis.ticks.length=unit(-0.15, "cm"),
+        axis.text.x = element_text(margin = unit(c(t = 3.5, r = 0, b = 0, l = 0), "mm"), size=14, color="black", angle = 90),
+        axis.text.y = element_text(margin = unit(c(t = 0, r = 3.5, b = 0, l = 3), "mm"), size=14, color="black"),
+        axis.text.y.right = element_text(margin = unit(c(t = 0, r = 3, b = 0, l = 3.5), "mm"), size=14, color="black"))
+
+#Grafica Tin + boundaries + energy cost
+ggplot(df_eval[df_eval$time_to_predict_step >= as.POSIXct(x = "2019-01-04 00:00:00 UTC", tz = "UTC") &
+                 df_eval$time_to_predict_step <= as.POSIXct(x = "2019-01-07 00:00:00 UTC", tz = "UTC"),]) +
+  geom_line(aes(x = time_to_predict_step, y = price/5 + 8, color = "Energy price", linetype = "Energy price"), size = l_size) +
+  geom_line(aes(x = time_to_predict_step, y = ti_min, color = "Tmin", linetype = "Tmin"), size = l_size) +
+  geom_line(aes(x = time_to_predict_step, y = ti_max, color = "Tmax", linetype = "Tmax"), size = l_size) +
+  geom_line(aes(x = time_to_predict_step, y = Temp_aver, color = "Tin", linetype = "Tin"), size = l_size) +
+  xlab("Time[hours]") + 
+  scale_x_datetime(labels = date_format("%m/%d %H:%M"), breaks = seq(from = as.POSIXct(x = "2019-01-04 00:00:00 UTC", tz = "UTC"),
+                                                                     to = as.POSIXct(x = "2019-01-07 00:00:00 UTC", tz = "UTC"),
+                                                                     by = 3600*6)) +
+  ylab(expression("T"~"[ºC]")) +
+  scale_y_continuous(sec.axis = sec_axis(~ .*5 - (8*5), name = "Energy cost [Eur/MW]", breaks = seq(from=40,to=80,by=10), labels = seq(from=40,to=80,by=10)),
+                     position = "left", guide = guide_axis(check.overlap = T)) +
+  scale_color_manual(values = c("Tin" = "black", "Tmin" = "blue", "Tmax" = "red", "Energy price" = "grey"), name = "A") +
+  scale_linetype_manual(values = c("Tin" = "solid", "Tmin" = "twodash", "Tmax" = "dashed", "Energy price" = "solid"), name = "A") +
+  theme_classic()+
+  theme(legend.title = element_blank(), 
+        legend.position = "bottom", 
+        text = element_text(size=14, colour = "black"),
+        legend.key.width=unit(3, "line"), 
+        axis.ticks.length=unit(-0.15, "cm"),
+        axis.text.x = element_text(margin = unit(c(t = 3.5, r = 0, b = 0, l = 0), "mm"), size=14, color="black", angle = 90),
+        axis.text.y.left = element_text(margin = unit(c(t = 0, r = 3.5, b = 0, l = 3), "mm"), size=14, color="black"),
+        axis.text.y.right = element_text(margin = unit(c(t = 0, r = 3, b = 0, l = 3.5), "mm"), size=14, color="black"))
+
+
+#Electricity price + iteration electricity cost + consumption points
+l_size = 1.2
+ggplot(df_eval[df_eval$time_to_predict_step >= as.POSIXct(x = "2019-01-04 00:00:00 UTC", tz = "UTC") &
+                 df_eval$time_to_predict_step <= as.POSIXct(x = "2019-01-07 00:00:00 UTC", tz = "UTC"),]) +
+  geom_line(aes(x = time_to_predict_step, y = price,  color = "Electricity price"), size = l_size) +
+  # geom_point(aes(x = time_to_predict_step, y = price, color = "price_point_b"), size = 3) +
+  geom_point(aes(time_to_predict_step, ifelse(HPs_optim>0,price,NA), color = "Consumption point"), size = 3) +
+  geom_line(aes(time_to_predict_step, (cost*150) + 40, color = "Iteration cost"), size = l_size) +
+  xlab("Time") + 
+  scale_x_datetime(labels = date_format("%m/%d %H:%M"), breaks = seq(from = as.POSIXct(x = "2019-01-04 00:00:00 UTC", tz = "UTC"),
+                                                                     to = as.POSIXct(x = "2019-01-07 00:00:00 UTC", tz = "UTC"),
+                                                                     by = 3600*6)) +
+  ylab("Electricity price [Eur/MWh]") +
+  scale_y_continuous(sec.axis = sec_axis(~ ./150 - 40/150, name = "Iteration cost [Eur]"), position = "left", guide = guide_axis(check.overlap = T)) +
+  scale_color_manual(values = c("Electricity priece" = "cyan4", "price_point_b" = "blue", "Consumption point" = "red",
+                                "Iteration cost" = "black"), name = "ABC") +
+  
+  theme_classic() +
+  theme(legend.title = element_blank(), legend.position = "bottom", text = element_text(size=14, colour = "black"),
+        legend.key.width=unit(2, "line"), 
+        axis.ticks.length=unit(-0.15, "cm"),
+        axis.text.x = element_text(margin = unit(c(t = 3.5, r = 0, b = 0, l = 0), "mm"), size=14, color="black", angle = 90),
+        axis.text.y = element_text(margin = unit(c(t = 0, r = 3.5, b = 0, l = 3), "mm"), size=14, color="black"),
+        axis.text.y.right = element_text(margin = unit(c(t = 0, r = 3, b = 0, l = 3.5), "mm"), size=14, color="black"))
+
+
+
+
+l_size = 1.2
+ggplot() +
+  geom_line(aes(x = df_fake_g$iteration+0.4, y = df_fake_g$ti, color = "Heating", linetype = "Heating"), size = l_size) +
+  geom_line(aes(x = df_fake_cold_g$iteration, y = df_fake_cold_g$ti, color = "Free floating", linetype = "Free floating"), size = l_size) +
+  geom_line(aes(x = c(0, 0, setback-1, setback, setback, setback+1), y = c(hot_temp, cold_temp, cold_temp, cold_temp, hot_temp, hot_temp), 
+                color = "Min. temp. setpoint", linetype = "Min. temp. setpoint"), size = l_size) +
+  xlab("Time[hours]") + scale_x_continuous(breaks = seq(from = 0, to = 12, by = 2), limits = c(0, setback+1)) + # + xlim(0, setback+2)
+  ylab(expression("T"^"i"~"[ºC]")) + ylim(cold_temp-0, hot_temp+0.3) + #ylab("Ti[ºC]")
+  scale_color_manual(values = c("Free floating" = "blue", "Heating" = "red", "Min. temp. setpoint" = "grey50"), name = "A") +
+  scale_linetype_manual(values = c("Free floating" = "dotted", "Heating" = "solid", "Min. temp. setpoint" = "dashed"), name = "A") +
+  geom_segment(aes(x = 7.5, y = 18.85, xend = setback-0.1, yend = 18.85), size = 1.3, arrow = arrow(length = unit(0.25, "cm"), ends = "both")) +
+  annotate("text", x=8.9, y=19.1, label= expression("h"["cross"]), size = 6) +
+  # scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+  theme_classic()+
+  theme(legend.title = element_blank(), legend.position = c(0.65,0.25), text = element_text(size=14, colour = "black"),
+        legend.key.width=unit(2, "line"), 
+        axis.ticks.length=unit(-0.15, "cm"),
+        axis.text.x = element_text(margin = unit(c(t = 3.5, r = 0, b = 0, l = 0), "mm"), size=14, color="black"),
+        axis.text.y = element_text(margin = unit(c(t = 0, r = 3.5, b = 0, l = 0), "mm"), size=14, color="black")
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 cbPalette <- c("black", "red", "yellow")
 ggplotly(

@@ -5,7 +5,7 @@
 # MPCsubex1
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Use of penalized()/penalized-functions.R")
+source("Paper_horizon_length/penalized-functions.R")
 
 # Libraries for mathematics
 library(expm)
@@ -81,7 +81,7 @@ df_weather <- data.frame(
 # df_house$vent <- house2$total_VFR[1:1053]
 df <- merge(df_house,df_weather)
 
-df_old <- readRDS("Use of penalized()/df.rds")
+df_old <- readRDS("Paper_horizon_length/df.rds")
 
 house2 <- read_excel_allsheets("data/validationdataset2_for_ARX.xlsx")$Sheet1
 df_house2 <- data.frame("time"=house2$DATE,
@@ -114,8 +114,8 @@ df_new_lag <- df_new
 df_new_lag[,"ti"] <- dplyr::lag(df_new_lag[,"ti"],1)
 # df_new_lag <- df_new_lag[-1,]
 
-saveRDS(df_new, "Use of penalized()/df_new.rds")
-saveRDS(df_new_lag, "Use of penalized()/df_new_lag.rds")
+saveRDS(df_new, "Paper_horizon_length/df_new.rds")
+saveRDS(df_new_lag, "Paper_horizon_length/df_new_lag.rds")
 
 
 df <- df_new
@@ -127,7 +127,7 @@ df <- df_bo
 horizon <- 6
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Use of penalized()/penalized-functions.R")
+source("Paper_horizon_length/penalized-functions.R")
 
 # The output should be the prediction of the optimum heat pump's status (ON/OFF) and set point temperature 
 # for the next 24 hours (both parameters are saved in the vector: params_hp_tset_24h). 
