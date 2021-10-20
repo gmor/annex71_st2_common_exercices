@@ -5,7 +5,7 @@
 # MPCmodel1
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Paper_horizon_length/penalized-functions.R")
+source("Paper_penalty+weights/penalized-functions.R")
 
 # Libraries for mathematics
 library(expm)
@@ -47,7 +47,7 @@ library(reticulate)
 
 ##It's created a new df making the true average of the 10 minute data which is already created with all the data treatment comented below
 #take the new_df
-df <- readRDS("Paper_horizon_length/df_new.rds")
+df <- readRDS("Paper_penalty+weights/df_new.rds")
 # house <- read_excel_allsheets("data/Twin_house_O5_exp1_60minR1.xlsx")$Sheet1
 # weather <- read_excel_allsheets("data/Twin_house_weather_exp1_60min_compensated.xlsx")$`Weather_Station_IBP_2018-11-01_`
 # weather[,c("sunAz","sunEl")] <- do.call(cbind,oce::sunAngle(weather$DATE,latitude = 47.874,longitude = 11.728))[,c("azimuth","altitude")]
@@ -205,11 +205,10 @@ val_dates <- eligible_dates[!(eligible_dates %in% train_dates_1) & !(eligible_da
 #                              max_per_feature = mapply(function(i){i[['max']]},features))
 # names(params) <- names(features)
 
-
 #Load the already optimized parameters
-params <- readRDS("Paper_horizon_length/params_bo")
-params["mod_ti_ar"]<-3 #2
-params["mod_ti_lags_hg"]<-5 #4
+params <- readRDS("Paper_penalty+weights/params2.RDS")
+# params["mod_ti_ar"]<-3 #2
+# params["mod_ti_lags_hg"]<-5 #4
 
 #Select the dates to train the models
 train_dates <- c(train_dates_1, train_dates_2)
@@ -231,7 +230,7 @@ mod_tsupply <- result_tsupply$mod
 
 ####################################### PENALTY lambdas #########################################################
 #Optimization for optimizing the lambdas of the mod_ti penalty function (finaly not used)
-source("Paper_horizon_length/penalized-functions.R")
+source("Paper_penalty+weights/penalized-functions.R")
 
 penalties <- list("L1"=list(min=0,max=0.5,n=5,class="float"),
                   "L2"=list(min=0,max=0.5,n=5,class="float"))
@@ -309,7 +308,7 @@ mod_ti_op <- result_ti_op$mod
 ######################################## MODEL VALIDATION ##########################################
 
 #Graphics to check if the ARX model fits
-cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values, main = "")
+cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values)
 cpgram(mod_ti@nuisance$df$ti_l0-mod_ti@fitted)#mod_ti@residuals)#(mod_ti$model$ti_l0-mod_ti$fitted.values)
 cpgram(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values)
 cpgram(mod_cop$model$hp_cop_l0-mod_cop$fitted.values)
@@ -621,7 +620,7 @@ ggplot() +
   scale_color_manual(values = c("Free floating" = "blue", "Heating" = "red", "Min. temp. setpoint" = "grey50"), name = "A") +
   scale_linetype_manual(values = c("Free floating" = "dotted", "Heating" = "solid", "Min. temp. setpoint" = "dashed"), name = "A") +
   geom_segment(aes(x = 7.5, y = 18.85, xend = setback-0.1, yend = 18.85), size = 1.3, arrow = arrow(length = unit(0.25, "cm"), ends = "both")) +
-  annotate("text", x=8.9, y=19.1, label= expression("TH"["cross"]), size = 5) +
+  annotate("text", x=8.9, y=19.1, label= expression("h"["cross"]), size = 6) +
   # scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
   theme_classic()+
   theme(legend.title = element_blank(), legend.position = c(0.65,0.25), text = element_text(size=14, colour = "black"),
@@ -644,16 +643,16 @@ for (i in 1:length(setback)) {
 }
 
 ggplot() +
-  geom_line(aes(x = 1:20, y = min_horizon, color = "THop", linetype = "THop"), size = (l_size)) +
+  geom_line(aes(x = 1:20, y = min_horizon, color = "hop", linetype = "hop"), size = (l_size)) +
   geom_line(aes(x = 1:20, y = setback, color = "setback", linetype = "setback"), size = l_size) +
-  geom_line(aes(x = 1:20, y = rep(horizon_optim,20), color = "THlag", linetype = "THlag"), size = l_size) +
-  geom_line(aes(x = 1:20, y = rep(horizon_optim+hours_heating,20), color = "THlag", linetype = "THlag"), size = l_size) +
+  geom_line(aes(x = 1:20, y = rep(horizon_optim,20), color = "hlag", linetype = "hlag"), size = l_size) +
+  geom_line(aes(x = 1:20, y = rep(horizon_optim+hours_heating,20), color = "hlag", linetype = "hlag"), size = l_size) +
   xlab("Time in setback[h]") + #scale_x_continuous(breaks = seq(from = 0, to = 12, by = 2), limits = c(0, setback+1)) + # + xlim(0, setback+2)
   ylab(expression("horizon[h]")) + #+ ylim(cold_temp-0, hot_temp+0.3) + #ylab("Ti[ºC]")
-  scale_color_manual(values = c("THop" = "black", "setback" = "red", "THlag" = "grey50"), name = "A") +
-  scale_linetype_manual(values = c("THop" = "solid", "setback" = "longdash", "THlag" = "dotdash"), name = "A") +
-  annotate("text", x=5, y=6, label= expression("TH"["lag"]), size = 6) +
-  annotate("text", x=14, y=16, label= expression("min(TH"["lag"]+"TH"["heat"]~", TH"["lag"]+"TH"["cross"]~")"), size = 6) +
+  scale_color_manual(values = c("hop" = "black", "setback" = "red", "hlag" = "grey50"), name = "A") +
+  scale_linetype_manual(values = c("hop" = "solid", "setback" = "longdash", "hlag" = "dotdash"), name = "A") +
+  annotate("text", x=5, y=6, label= expression("h"["lag"]), size = 6) +
+  annotate("text", x=14, y=16, label= expression("min(h"["lag"]+"h"["heat"]~", h"["lag"]+"h"["cross"]~")"), size = 6) +
   theme_classic()+
   theme(legend.title = element_blank(), legend.position = c(0.85,0.55), text = element_text(size=14, colour = "black"),
         legend.key.width=unit(3, "line"), 
@@ -842,9 +841,10 @@ plot(CVRMSE_hp_cons_)
 # df_initaial <- df #save the initial df if is needed to restart the simulation
 df <- df_initaial
 horizon <- 9 #MPC prediction horizon
+weight <- R2_df_ti_[1:horizon]/R2_df_ti_[1]
 
 setwd("C:/Users/gerar/Nextcloud/Github/annex71_st2_common_exercices")
-source("Paper_horizon_length/penalized-functions.R")
+source("Paper_penalty+weights/penalized-functions.R")
 
 # The output should be the prediction of the optimum heat pump's status (ON/OFF) and set point temperature 
 # for the next "horizon" hours (both parameters are saved in the vector: params_hp_tset_24h). 
@@ -1019,7 +1019,7 @@ max_time = as.numeric(seconds(as.POSIXct(x = "2019-01-13 01:00:00 UTC", tz = "UT
 # time_to_predict_step <- as.POSIXct(x = "2019-01-02 22:00:00", tz = "UTC")
 
 ## Cluster for parallelization (not working)
-# cl<-makeCluster(3,type="SOCK")#(###YOUR NUMBER OF CORES GOES HERE ###,type="SOCK")
+cl<-makeCluster(3,type="SOCK")#(###YOUR NUMBER OF CORES GOES HERE ###,type="SOCK")
 
 #start the MPC loop
 while (time <= max_time) { #<=
@@ -1093,6 +1093,7 @@ while (time <= max_time) { #<=
         crossover = partial(bee_uCrossover, nclasses_per_feature =  mapply(function(i){length(i[["levels"]])-1},features)),
         df = df,
         horizon = horizon,
+        weight = weight,
         suggestions = suggestions,
         keepBest = TRUE,
         popSize = 400, #64
@@ -1102,8 +1103,9 @@ while (time <= max_time) { #<=
         elitism = 0.05,#0.08
         pcrossover = 0.8,
         pmutation = 0.20, #0.05
-        maxFitness = -(sum(0)+(sum((price/1000000)*4000)))*(1+0)#if the fitness value is the cost function
+        maxFitness = -((sum(0)+sum((price*weight/1000000)*4000))*(1+0))#if the fitness value is the cost function
                                                                 #with zero consumption and zero penalty it stops the GA
+                                                                #-(sum(0)+(sum((price/1000000)*4000)))*(1+0)
       ))
     # )
 
@@ -1149,6 +1151,7 @@ while (time <= max_time) { #<=
                             time_to_predict = time_to_predict_step,
                             params = params,
                             horizon = horizon,
+                            weight = weight,
                             post_analysis=T)
     
     penalty <- RETURN$penalty
@@ -1206,7 +1209,7 @@ while (time <= max_time) { #<=
   
   # print(df_result)
 }
-# stopCluster(cl)
+stopCluster(cl)
 
 #Append the forecasted results into one variable
 for (i in 1:ncol(df_sol_Tave)) {
@@ -1246,7 +1249,7 @@ max(disconfort)
 sum(disconfort)
 hist(disconfort)
 disconfort <- disconfort[disconfort != 0]
-hist(disconfort, breaks = c(seq(from = 0, to = 0.16, by= 0.02)))#, breaks = c(seq(from = 0, to = 0.25, by= 0.02)))
+hist(disconfort, breaks = c(seq(from = 0, to = 0.36, by= 0.02)))#, breaks = c(seq(from = 0, to = 0.25, by= 0.02)))
 sum(df_disconfort$hp_el*df_disconfort$price/1000000)
 
 plot(df_eval$time_to_predict_step,df_eval$Temp_aver-df_eval$tin_Data_Driven)
@@ -1487,19 +1490,6 @@ ggplot() +
 ggplot() + geom_line(aes(df$time,df$te)) +
   geom_vline(xintercept=c(as.POSIXct(x = "2018-12-25 00:00:00 UTC", tz = "UTC")), linetype=2, color = "red", size = 1) + 
   geom_vline(xintercept=c(as.POSIXct(x = "2019-01-03 00:00:00 UTC", tz = "UTC")), linetype=2, color = "blue", size = 1)
-
-
-#models cpgrams
-cpgram(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values, main = "")
-cpgram(mod_q$model$hp_cons_l0-mod_q$fitted.values, main = "")
-cpgram(mod_cop$model$hp_cop_l0-mod_cop$fitted.values, main = "")
-cpgram(mod_ti@nuisance$df$ti_l0-mod_ti@fitted, main = "")#mod_ti@residuals)#(mod_ti$model$ti_l0-mod_ti$fitted.values)
-
-plot(mod_tsupply$model$tsupply_l0-mod_tsupply$fitted.values)
-plot(mod_q$model$hp_cons_l0-mod_q$fitted.values)
-plot(mod_cop$model$hp_cop_l0-mod_cop$fitted.values)
-plot(mod_ti@residuals)
-plot(mod_ti@nuisance$df$ti_l0-mod_ti@fitted)
 
 ######################################################### Export Data to Matlab ###############################################
 

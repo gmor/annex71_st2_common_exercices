@@ -261,7 +261,7 @@ calculate_model_ti <- function(params, df, train_dates, output="aic", penalty = 
                                    # paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},1:params["mod_ti_lags_dti"]),collapse=" + "),
                                    #paste0("hp_cons_l",0:(params["mod_ti_lags_dti"]),":as.factor(hp_status_l0)",collapse=" + "),
                                    # paste0("bs(hg_l",0:(params["mod_ti_lags_hg"]),",degree=2,knots=3)",collapse=" + "),
-                                   paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + "),
+                                   ## no available ## paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + "),
                                    #paste0("GHI_l",0:(params["mod_ti_lags_GHI"]),":fs(sunAz/360,2)",collapse=" + "), #
                                    paste0("BHI_l",0:(params["mod_ti_lags_BHI"]),"",collapse=" + "), #
                                    paste0("BHI_l",0:(params["mod_ti_lags_BHI"]),":fs(sunAz/360,2)",collapse=" + "),
@@ -848,7 +848,7 @@ optimizer_model_parameters <- function(X, class_per_feature, nclasses_per_featur
 
 #To run the MPC
 optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_feature, levels_per_feature, 
-                          df, mod_q, mod_ti, mod_tsupply, mod_cop, ti_min, ti_max, price, time_to_predict, params, horizon, post_analysis = F){
+                          df, mod_q, mod_ti, mod_tsupply, mod_cop, ti_min, ti_max, price, time_to_predict, params, horizon, weight, post_analysis = F){
   
   #X=sample(c(0,1),nBits,replace=T)
   
@@ -919,14 +919,14 @@ optimizer_MPC <- function(X, class_per_feature, nclasses_per_feature, names_per_
     # 3) Linear growth of penalty
     # delta_penalty <- 
     
-    penalty <- sum(delta_penalty)*500000000
+    penalty <- delta_penalty*500000000
   } else {
     penalty <- 0
   }
   
   # Cost function: sum over 24 hours
-  iteration_cost <- sum((price/1000000)*predv$hp_cons_l0)
-  score <- (sum(iteration_cost)+(sum((price/1000000)*4000)))*(1+penalty) # (sum(iteration_cost) + 1) * (penalty + 1)
+  iteration_cost <- (price/1000000)*predv$hp_cons_l0
+  score <- (sum(iteration_cost*weight)+sum((price*weight/1000000)*4000))*(1+sum(penalty*weight)) # (sum(iteration_cost) + 1) * (penalty + 1)
   #Arash score <- sum(iteration_cost) + 0.030*(sum(delta))
   
   if(post_analysis==T){

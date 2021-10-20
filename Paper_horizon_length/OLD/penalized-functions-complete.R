@@ -855,7 +855,7 @@ calculate_model_ti <- function(params, df, train_dates, output="aic", penalty = 
                                    #paste0("bs(tsupply_l",1:(params["mod_ti_lags_dti"]),",degree=2,knots=3)",collapse=" + "),
                                    #paste0("tsupply_l",0:(params["mod_ti_lags_dti"]),collapse=" + "),
                                    paste0("te_l",0:(params["mod_ti_lags_te"]),"",collapse=" + "),
-                                   paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},1:params["mod_ti_lags_dti"]),collapse=" + "),
+                                   # paste0(mapply(function(x){sprintf("tsupply_l%s:as.factor(hp_status_l%s)",x,x)},1:params["mod_ti_lags_dti"]),collapse=" + "),
                                    #paste0("hp_cons_l",0:(params["mod_ti_lags_dti"]),":as.factor(hp_status_l0)",collapse=" + "),
                                    # paste0("bs(hg_l",0:(params["mod_ti_lags_hg"]),",degree=2,knots=3)",collapse=" + "),
                                    paste0("hg_l",0:(params["mod_ti_lags_hg"]),"",collapse=" + "),
@@ -865,7 +865,7 @@ calculate_model_ti <- function(params, df, train_dates, output="aic", penalty = 
                                    # paste0("infiltrations_l",0:(params["mod_ti_lags_infiltrations"]),"",collapse=" + "),
                                    # paste0(mapply(function(x){sprintf("vent_l%s:as.factor(vent_status_l%s)",x,x)},0:params["mod_ti_lags_ventilation"]),"",collapse=" + "),
                                    # paste0("vent_l",0:(params["mod_ti_lags_ventilation"]),"",collapse=" + "),
-                                   paste0("air_h_l",0:(params["mod_ti_lags_air_h"]),"",collapse=" + "),
+                                   # paste0("air_h_l",0:(params["mod_ti_lags_air_h"]),"",collapse=" + "),
                                    sep=" + "
                                  )))
   
@@ -1014,7 +1014,7 @@ calculate_model_cop <- function(params, df, train_dates, output="aic"){
       paste(
         paste0("bs(tsupply_l0,degree=2,knots=4)",collapse=" + "),
         paste0("bs(te_raw_l0,degree=2,knots=4)",collapse=" + "),
-        paste0("bs(te_raw_l1,degree=2,knots=4)",collapse=" + "),
+        # paste0("bs(te_raw_l1,degree=2,knots=4)",collapse=" + "),
         "tsupply_l0:te_raw_l0",
         sep=" + ")))
   
@@ -1054,8 +1054,7 @@ calculate_model_tsupply <- function(params, df, train_dates, output="aic"){
         #paste0("hg_l",0:params["lags_hg"],"",collapse=" + "),
                     #paste0("ti_l",1:max(1,params["lags_ti"]),"",collapse=" + ")
         sep=" + "
-      )
-  ))
+      )))
   
   # Define the sunAzimuth fourier series terms and add the GHI terms to the formula
   # for (i in 0:params["lags_GHI"]){
@@ -1636,7 +1635,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, mod_cop, df, rows_to
                                                                       day(ts_prediction[length(ts_prediction)])), tz = "UTC")-days(1))
     }
   }
-  
+  # hp_tset_24h <- c(rep("42", horizon))
   # ts_prediction <- df$time[1]
   
   # Simulate by sets of 24h from the ts_prediction
@@ -1645,7 +1644,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, mod_cop, df, rows_to
     # Filter the initial dataset 
     # ts_ = ts_prediction[1]
     # df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(23)),]
-    df_ <- df[df$time>=ts_ & df$time<=(ts_+hours(horizon-1)),]
+    df_ <- df[df$time>=(ts_) & df$time<=(ts_+hours(horizon-1)),]
     df_$ts_prediction <- ts_
     
     # Assign the control variables of the scenario
@@ -1701,7 +1700,7 @@ prediction_scenario <- function(mod_q, mod_ti, mod_tsupply, mod_cop, df, rows_to
       for (l in 1:max(params[c("mod_tsupply_ar","mod_hp_cons_lags_tsupply","mod_ti_lags_dti")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("tsupply_l",l)] <- df_$tsupply_l0[i]}}, error=function(e){next})
       }
-      for (l in 1:max(params[c("mod_hp_cons_ar","mod_tsupply_lags_hp_cons","mod_tsupply_ar","mod_ti_lags_dti")])){
+      for (l in 1:max(params[c("mod_hp_cons_ar","mod_tsupply_lags_hp_cons","mod_tsupply_ar","mod_ti_lags_dti","mod_ti_lags_hp_cons")])){
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cons_l",l)] <- df_$hp_cons_l0[i]}}, error=function(e){next})
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_cop_l",l)] <- df_$hp_cop_l0[i]}}, error=function(e){next})
         tryCatch({if((i+l)<=nrow(df_)){df_[i+l,paste0("hp_thermal_l",l)] <- df_$hp_thermal_l0[i]}}, error=function(e){next})
